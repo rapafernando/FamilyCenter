@@ -81,7 +81,7 @@ npm -v
 Clone your repository (or copy your files via SCP/FTP):
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/family-sync-dashboard.git
+git clone https://github.com/rapafernando/FamilyCenter.git
 cd family-sync-dashboard
 ```
 
