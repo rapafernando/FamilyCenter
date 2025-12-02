@@ -1,0 +1,5 @@
+{
+  "name": "FamilySync Dashboard",
+  "description": "A Skylight-style family organizer with chore tracking, rewards, and AI-powered scheduling.",
+  "requestFramePermissions": []
+}
