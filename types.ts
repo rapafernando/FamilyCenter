@@ -59,6 +59,7 @@ export interface Photo {
 }
 
 export interface AppState {
+  familyName: string;
   users: User[];
   chores: Chore[];
   rewards: Reward[];

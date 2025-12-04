@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 
 interface FamilyWallDashboardProps {
+  familyName: string;
   users: User[];
   events: CalendarEvent[];
   chores: Chore[];
@@ -18,7 +19,7 @@ interface FamilyWallDashboardProps {
 }
 
 const FamilyWallDashboard: React.FC<FamilyWallDashboardProps> = ({ 
-  users, events, chores, meals, photos, onSettingsClick, onToggleChore, onUpdateMeal
+  familyName, users, events, chores, meals, photos, onSettingsClick, onToggleChore, onUpdateMeal
 }) => {
   const [activeTab, setActiveTab] = useState<'calendar' | 'tasks' | 'meals' | 'photos'>('calendar');
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -38,7 +39,7 @@ const FamilyWallDashboard: React.FC<FamilyWallDashboardProps> = ({
   // Photo Slideshow
   useEffect(() => {
     let interval: ReturnType<typeof setInterval>;
-    if (activeTab === 'photos' && isPlaying && isSynced) {
+    if (activeTab === 'photos' && isPlaying && isSynced && photos.length > 0) {
       interval = setInterval(() => {
         setCurrentPhotoIdx(prev => (prev + 1) % photos.length);
       }, 5000);
@@ -66,8 +67,6 @@ const FamilyWallDashboard: React.FC<FamilyWallDashboardProps> = ({
   };
 
   const handleMealEdit = (date: Date, type: MealType, currentVal: string) => {
-     // For this interface, a simple prompt is effective enough
-     // In a production app, this would be a nice modal popover
      const newVal = window.prompt(`Update ${type} for ${getDayName(date)}:`, currentVal);
      if (newVal !== null) {
        const dateStr = date.toISOString().split('T')[0];
@@ -90,7 +89,9 @@ const FamilyWallDashboard: React.FC<FamilyWallDashboardProps> = ({
       {/* Sidebar */}
       <div className="w-24 bg-white border-r border-slate-200 flex flex-col items-center py-6 gap-8 z-10 shadow-[4px_0_24px_rgba(0,0,0,0.02)]">
         <div className="mb-2">
-           <div className="w-12 h-12 bg-slate-900 rounded-xl flex items-center justify-center text-white font-bold text-xl">S</div>
+           <div className="w-12 h-12 bg-slate-900 rounded-xl flex items-center justify-center text-white font-bold text-xl">
+             {familyName.charAt(0)}
+           </div>
         </div>
 
         <nav className="flex-1 flex flex-col gap-6 w-full px-2">
@@ -118,7 +119,7 @@ const FamilyWallDashboard: React.FC<FamilyWallDashboardProps> = ({
         {activeTab !== 'photos' && (
           <header className="px-8 py-5 flex items-center justify-between bg-white border-b border-slate-100">
             <div className="flex items-center gap-6">
-              <h1 className="text-2xl font-serif text-slate-800 tracking-tight">Miller Family</h1>
+              <h1 className="text-2xl font-serif text-slate-800 tracking-tight">{familyName}</h1>
               <div className="text-slate-400 text-lg font-light flex items-center gap-2">
                  <Clock size={18} />
                  {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -219,6 +220,11 @@ const FamilyWallDashboard: React.FC<FamilyWallDashboardProps> = ({
                       </div>
                    </div>
                 ))}
+                {users.filter(u => u.role === 'KID').length === 0 && (
+                   <div className="col-span-2 text-center text-slate-400 py-10 bg-white rounded-2xl">
+                     No kid accounts found. Please add them in Settings.
+                   </div>
+                )}
               </div>
            </div>
         )}
@@ -325,7 +331,7 @@ const FamilyWallDashboard: React.FC<FamilyWallDashboardProps> = ({
               {/* Controls Overlay (Visible on hover) */}
               <div className="absolute top-0 left-0 w-full p-6 flex justify-between items-start opacity-0 group-hover:opacity-100 transition-opacity z-30">
                  <div className="bg-black/30 backdrop-blur-md text-white px-4 py-2 rounded-full text-sm font-medium">
-                    {currentPhotoIdx + 1} / {photos.length}
+                    {currentPhotoIdx + 1} / {Math.max(1, photos.length)}
                  </div>
                  <div className="flex gap-2">
                     <button onClick={() => setIsPlaying(!isPlaying)} className="p-3 bg-black/30 hover:bg-black/50 text-white rounded-full backdrop-blur-md">

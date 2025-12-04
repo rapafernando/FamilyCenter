@@ -1,22 +1,36 @@
 import React, { useState } from 'react';
-import { User, Chore, Reward, CalendarEvent, UserRole } from '../types';
-import { Calendar as CalIcon, CheckSquare, Settings, Sparkles, Plus, Loader2 } from 'lucide-react';
+import { User, Chore, Reward, UserRole } from '../types';
+import { Calendar as CalIcon, CheckSquare, Settings, Sparkles, Plus, Loader2, Trash2, UserPlus, Save } from 'lucide-react';
 import { suggestChores, AIChoreSuggestion } from '../services/geminiService';
 
 interface ParentPortalProps {
+  familyName: string;
   users: User[];
   chores: Chore[];
   rewards: Reward[];
   onAddChore: (chore: Omit<Chore, 'id'>) => void;
+  onDeleteChore: (id: string) => void;
   onApproveReward: (id: string) => void;
+  onUpdateFamilyName: (name: string) => void;
+  onAddUser: (name: string, role: UserRole) => void;
+  onDeleteUser: (id: string) => void;
 }
 
-const ParentPortal: React.FC<ParentPortalProps> = ({ users, chores, rewards, onAddChore, onApproveReward }) => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'chores' | 'rewards'>('overview');
+const ParentPortal: React.FC<ParentPortalProps> = ({ 
+  familyName, users, chores, rewards, 
+  onAddChore, onDeleteChore, onApproveReward, 
+  onUpdateFamilyName, onAddUser, onDeleteUser 
+}) => {
+  const [activeTab, setActiveTab] = useState<'overview' | 'chores' | 'rewards' | 'settings'>('overview');
   const [aiPrompt, setAiPrompt] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [aiSuggestions, setAiSuggestions] = useState<AIChoreSuggestion[]>([]);
   
+  // Settings Form State
+  const [newName, setNewName] = useState('');
+  const [newRole, setNewRole] = useState<UserRole>(UserRole.KID);
+  const [editingFamilyName, setEditingFamilyName] = useState(familyName);
+
   const kids = users.filter(u => u.role === UserRole.KID);
   const wishlistItems = rewards.filter(r => r.requestedBy && !r.approved);
 
@@ -39,8 +53,15 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ users, chores, rewards, onA
       dueDate: new Date().toISOString(),
       icon: 'star'
     });
-    // Remove from list after adding
     setAiSuggestions(prev => prev.filter(p => p.title !== s.title));
+  };
+
+  const handleAddUserSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if(newName.trim()) {
+      onAddUser(newName, newRole);
+      setNewName('');
+    }
   };
 
   return (
@@ -48,7 +69,7 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ users, chores, rewards, onA
       {/* Sidebar */}
       <div className="w-64 bg-slate-900 text-slate-300 flex flex-col p-4 hidden md:flex">
         <div className="mb-10 px-2 pt-4">
-          <h2 className="text-2xl font-bold text-white tracking-tight">Family<span className="text-blue-400">Sync</span></h2>
+          <h2 className="text-xl font-bold text-white tracking-tight truncate">{familyName}</h2>
           <p className="text-xs text-slate-500 mt-1">Parent Command Center</p>
         </div>
         
@@ -69,10 +90,16 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ users, chores, rewards, onA
             onClick={() => setActiveTab('rewards')}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'rewards' ? 'bg-blue-600 text-white' : 'hover:bg-slate-800'}`}
           >
-            <Settings size={20} /> Rewards
+            <Sparkles size={20} /> Rewards
             {wishlistItems.length > 0 && (
                <span className="ml-auto bg-rose-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">{wishlistItems.length}</span>
             )}
+          </button>
+          <button 
+            onClick={() => setActiveTab('settings')}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'settings' ? 'bg-blue-600 text-white' : 'hover:bg-slate-800'}`}
+          >
+            <Settings size={20} /> Settings
           </button>
         </nav>
 
@@ -81,8 +108,6 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ users, chores, rewards, onA
         </div>
       </div>
 
-      {/* Mobile Nav Placeholder (Simplified for demo) */}
-      
       {/* Main Content */}
       <div className="flex-1 overflow-y-auto p-6 md:p-10">
         
@@ -111,35 +136,11 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ users, chores, rewards, onA
                       </div>
                    </div>
                  ))}
-              </div>
-              
-              <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-                <h3 className="font-bold text-lg mb-4 text-slate-800">Pending Approvals</h3>
-                {wishlistItems.length === 0 ? (
-                  <p className="text-slate-400 italic">No pending requests.</p>
-                ) : (
-                  <div className="space-y-3">
-                    {wishlistItems.map(item => (
-                      <div key={item.id} className="flex items-center justify-between bg-slate-50 p-4 rounded-xl">
-                        <div className="flex items-center gap-3">
-                           <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center border border-slate-200">
-                             <img src={users.find(u => u.id === item.requestedBy)?.avatar} className="w-8 h-8 rounded-full" />
-                           </div>
-                           <div>
-                              <p className="font-bold text-slate-800">{item.title}</p>
-                              <p className="text-sm text-slate-500">Cost: {item.cost} pts</p>
-                           </div>
-                        </div>
-                        <button 
-                          onClick={() => onApproveReward(item.id)}
-                          className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg font-medium text-sm transition-colors"
-                        >
-                          Approve
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                 {kids.length === 0 && (
+                   <div className="bg-slate-50 p-6 rounded-2xl border border-dashed border-slate-300 flex items-center justify-center text-slate-400">
+                     No kid accounts yet. Go to Settings to add them.
+                   </div>
+                 )}
               </div>
            </div>
         )}
@@ -198,6 +199,7 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ users, chores, rewards, onA
                                       <img src={kid.avatar} className="w-full h-full" alt={kid.name} />
                                    </button>
                                  ))}
+                                 {kids.length === 0 && <span className="text-xs text-red-500 flex items-center">Add kids in Settings first!</span>}
                               </div>
                            </div>
                         ))}
@@ -216,6 +218,7 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ users, chores, rewards, onA
                            <th className="pb-3 text-slate-400 font-medium text-sm">Assigned To</th>
                            <th className="pb-3 text-slate-400 font-medium text-sm">Points</th>
                            <th className="pb-3 text-slate-400 font-medium text-sm">Status</th>
+                           <th className="pb-3 text-slate-400 font-medium text-sm text-right">Action</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-50">
@@ -235,12 +238,139 @@ const ParentPortal: React.FC<ParentPortalProps> = ({ users, chores, rewards, onA
                                    : <span className="text-slate-400 text-sm">Pending</span>
                                  }
                               </td>
+                              <td className="py-4 text-right">
+                                <button 
+                                  onClick={() => onDeleteChore(chore.id)}
+                                  className="text-slate-300 hover:text-red-500 transition-colors"
+                                >
+                                  <Trash2 size={18} />
+                                </button>
+                              </td>
                            </tr>
                          ))}
+                         {chores.length === 0 && (
+                           <tr>
+                             <td colSpan={5} className="py-8 text-center text-slate-400 italic">No chores created yet.</td>
+                           </tr>
+                         )}
                       </tbody>
                    </table>
                 </div>
              </div>
+          </div>
+        )}
+
+        {activeTab === 'rewards' && (
+           <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                <h3 className="font-bold text-lg mb-4 text-slate-800">Pending Approvals</h3>
+                {wishlistItems.length === 0 ? (
+                  <p className="text-slate-400 italic py-4">No pending requests.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {wishlistItems.map(item => (
+                      <div key={item.id} className="flex items-center justify-between bg-slate-50 p-4 rounded-xl">
+                        <div className="flex items-center gap-3">
+                           <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center border border-slate-200">
+                             <img src={users.find(u => u.id === item.requestedBy)?.avatar} className="w-8 h-8 rounded-full" />
+                           </div>
+                           <div>
+                              <p className="font-bold text-slate-800">{item.title}</p>
+                              <p className="text-sm text-slate-500">Cost: {item.cost} pts</p>
+                           </div>
+                        </div>
+                        <button 
+                          onClick={() => onApproveReward(item.id)}
+                          className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg font-medium text-sm transition-colors"
+                        >
+                          Approve
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+           </div>
+        )}
+
+        {activeTab === 'settings' && (
+          <div className="space-y-8 max-w-4xl">
+            {/* General Settings */}
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+              <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+                <Settings size={20} className="text-slate-400"/> General
+              </h3>
+              <div className="flex gap-4 items-end">
+                <div className="flex-1">
+                  <label className="block text-sm font-medium text-slate-500 mb-1">Family Name</label>
+                  <input 
+                    type="text" 
+                    value={editingFamilyName}
+                    onChange={(e) => setEditingFamilyName(e.target.value)}
+                    className="w-full px-4 py-2 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <button 
+                  onClick={() => onUpdateFamilyName(editingFamilyName)}
+                  className="px-6 py-2.5 bg-slate-800 text-white font-bold rounded-xl hover:bg-slate-700 flex items-center gap-2"
+                >
+                  <Save size={18} /> Save
+                </button>
+              </div>
+            </div>
+
+            {/* User Management */}
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+              <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
+                <UserPlus size={20} className="text-slate-400"/> Family Members
+              </h3>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+                {users.map(user => (
+                  <div key={user.id} className="border border-slate-200 rounded-xl p-4 flex items-center justify-between">
+                     <div className="flex items-center gap-3">
+                        <img src={user.avatar} className="w-10 h-10 rounded-full bg-slate-100" />
+                        <div>
+                          <p className="font-bold text-slate-700">{user.name}</p>
+                          <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${user.role === UserRole.PARENT ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
+                            {user.role}
+                          </span>
+                        </div>
+                     </div>
+                     <button 
+                        onClick={() => onDeleteUser(user.id)}
+                        className="text-slate-300 hover:text-red-500 p-2"
+                        title="Remove User"
+                     >
+                       <Trash2 size={16} />
+                     </button>
+                  </div>
+                ))}
+              </div>
+
+              <div className="bg-slate-50 p-6 rounded-xl border border-slate-200">
+                 <h4 className="font-bold text-slate-700 mb-4">Add New Member</h4>
+                 <form onSubmit={handleAddUserSubmit} className="flex flex-col md:flex-row gap-4">
+                    <input 
+                      type="text" 
+                      placeholder="Name (e.g., Mom, Leo)" 
+                      required
+                      value={newName}
+                      onChange={(e) => setNewName(e.target.value)}
+                      className="flex-1 px-4 py-2 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <select 
+                      value={newRole}
+                      onChange={(e) => setNewRole(e.target.value as UserRole)}
+                      className="px-4 py-2 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                    >
+                      <option value={UserRole.KID}>Kid</option>
+                      <option value={UserRole.PARENT}>Parent</option>
+                    </select>
+                    <button type="submit" className="px-6 py-2 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700">
+                      Add Member
+                    </button>
+                 </form>
+              </div>
+            </div>
           </div>
         )}
       </div>

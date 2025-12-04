@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { User, Chore, Reward, CalendarEvent, UserRole, AppState, Meal, MealType } from './types';
+import { User, Chore, Reward, UserRole, AppState, Meal, MealType } from './types';
 import { INITIAL_USERS, INITIAL_CHORES, INITIAL_REWARDS, INITIAL_EVENTS, INITIAL_MEALS, INITIAL_PHOTOS } from './constants';
 import AuthScreen from './components/AuthScreen';
 import ParentPortal from './components/ParentPortal';
@@ -10,17 +10,50 @@ import { fetchGoogleCalendarEvents } from './services/googleService';
 
 type ViewState = 'WALL' | 'AUTH' | 'USER_SESSION';
 
+const STORAGE_KEY = 'familySyncData';
+
 const App: React.FC = () => {
   const [view, setView] = useState<ViewState>('WALL');
-  const [state, setState] = useState<AppState>({
-    users: INITIAL_USERS,
-    chores: INITIAL_CHORES,
-    rewards: INITIAL_REWARDS,
-    events: INITIAL_EVENTS,
-    meals: INITIAL_MEALS,
-    photos: INITIAL_PHOTOS,
-    currentUser: null
+  
+  // Initialize state from LocalStorage or default constants
+  const [state, setState] = useState<AppState>(() => {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        // Ensure we merge with defaults to avoid missing keys from old versions
+        return {
+          familyName: 'My Family',
+          users: [],
+          chores: [],
+          rewards: [],
+          events: [],
+          meals: [],
+          photos: [],
+          ...parsed,
+          currentUser: null // Always reset current user on reload
+        };
+      } catch (e) {
+        console.error("Failed to parse saved state", e);
+      }
+    }
+    return {
+      familyName: 'My Family',
+      users: INITIAL_USERS,
+      chores: INITIAL_CHORES,
+      rewards: INITIAL_REWARDS,
+      events: INITIAL_EVENTS,
+      meals: INITIAL_MEALS,
+      photos: INITIAL_PHOTOS,
+      currentUser: null
+    };
   });
+
+  // Save to LocalStorage whenever state changes (excluding currentUser)
+  useEffect(() => {
+    const { currentUser, ...persistentState } = state;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(persistentState));
+  }, [state]);
 
   const handleLogin = (user: User) => {
     setState(prev => ({ ...prev, currentUser: user }));
@@ -32,22 +65,19 @@ const App: React.FC = () => {
     setView('WALL');
   };
 
-  // Called after Google Auth successful, fetches calendar
+  // Google Sync Logic
   const handleGoogleSync = async (googleProfile: any) => {
     try {
       const googleEvents = await fetchGoogleCalendarEvents();
       
-      // Merge local fixed events with synced events
       setState(prev => ({
         ...prev,
-        events: [...INITIAL_EVENTS, ...googleEvents]
-      }));
-
-      // Optionally update a parent user with Google Avatar/Name
-      setState(prev => ({
-        ...prev,
+        events: [...(prev.events || []), ...googleEvents],
+        // If the current user is a parent, try to update their avatar/name if it's generic
         users: prev.users.map(u => 
-          u.id === 'p1' ? { ...u, name: googleProfile.given_name || u.name, avatar: googleProfile.picture || u.avatar } : u
+          u.id === prev.currentUser?.id && u.role === UserRole.PARENT
+            ? { ...u, name: googleProfile.given_name || u.name, avatar: googleProfile.picture || u.avatar } 
+            : u
         )
       }));
 
@@ -56,6 +86,8 @@ const App: React.FC = () => {
     }
   };
 
+  // --- Actions ---
+
   const handleToggleChore = (choreId: string) => {
     setState(prev => {
       const chore = prev.chores.find(c => c.id === choreId);
@@ -63,7 +95,6 @@ const App: React.FC = () => {
 
       const isCompleting = !chore.completed;
       
-      // Update Users Points
       const updatedUsers = prev.users.map(u => {
         if (u.id === chore.assignedTo) {
           return {
@@ -75,7 +106,6 @@ const App: React.FC = () => {
         return u;
       });
 
-      // Update Chore Status
       const updatedChores = prev.chores.map(c => 
         c.id === choreId ? { ...c, completed: isCompleting } : c
       );
@@ -95,6 +125,13 @@ const App: React.FC = () => {
      }));
   };
 
+  const handleDeleteChore = (id: string) => {
+    setState(prev => ({
+      ...prev,
+      chores: prev.chores.filter(c => c.id !== id)
+    }));
+  };
+
   const handleRequestReward = (title: string, cost: number) => {
      if(!state.currentUser) return;
      
@@ -104,7 +141,7 @@ const App: React.FC = () => {
        cost,
        requestedBy: state.currentUser.id,
        approved: false,
-       image: `https://picsum.photos/seed/${Date.now()}/200/200`
+       image: `https://ui-avatars.com/api/?name=${encodeURIComponent(title)}&background=random`
      };
 
      setState(prev => ({
@@ -139,10 +176,41 @@ const App: React.FC = () => {
     });
   };
 
-  // 1. Kiosk/Wall Mode (Default)
+  // Settings Actions
+  const handleUpdateFamilyName = (name: string) => {
+    setState(prev => ({ ...prev, familyName: name }));
+  };
+
+  const handleAddUser = (name: string, role: UserRole) => {
+    const newUser: User = {
+      id: `u${Date.now()}`,
+      name,
+      role,
+      avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random`,
+      points: 0,
+      totalPointsEarned: 0
+    };
+    setState(prev => ({ ...prev, users: [...prev.users, newUser] }));
+  };
+
+  const handleDeleteUser = (id: string) => {
+    if (state.users.length <= 1) {
+      alert("You cannot delete the last user.");
+      return;
+    }
+    setState(prev => ({
+      ...prev,
+      users: prev.users.filter(u => u.id !== id),
+      chores: prev.chores.filter(c => c.assignedTo !== id) // Cleanup assigned chores
+    }));
+  };
+
+  // --- Render ---
+
   if (view === 'WALL') {
     return (
       <FamilyWallDashboard 
+        familyName={state.familyName}
         users={state.users}
         events={state.events}
         chores={state.chores}
@@ -155,7 +223,6 @@ const App: React.FC = () => {
     );
   }
 
-  // 2. Auth Screen (Triggered by Settings)
   if (view === 'AUTH') {
     return (
       <AuthScreen 
@@ -167,11 +234,9 @@ const App: React.FC = () => {
     );
   }
 
-  // 3. Authenticated User Sessions
   if (view === 'USER_SESSION' && state.currentUser) {
     return (
       <div className="h-screen w-full relative">
-         {/* Logout Button */}
          <button 
           onClick={handleLogout}
           className="fixed top-4 right-4 z-50 bg-white/80 p-2 rounded-full shadow-sm hover:bg-slate-200 backdrop-blur-sm border border-slate-200"
@@ -182,11 +247,16 @@ const App: React.FC = () => {
   
          {state.currentUser.role === UserRole.PARENT ? (
            <ParentPortal 
+              familyName={state.familyName}
               users={state.users}
               chores={state.chores}
               rewards={state.rewards}
               onAddChore={handleAddChore}
+              onDeleteChore={handleDeleteChore}
               onApproveReward={handleApproveReward}
+              onUpdateFamilyName={handleUpdateFamilyName}
+              onAddUser={handleAddUser}
+              onDeleteUser={handleDeleteUser}
            />
          ) : (
            <KidDashboard 
