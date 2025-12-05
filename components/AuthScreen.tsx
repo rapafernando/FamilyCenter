@@ -39,6 +39,7 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ users, onLogin, onCancel, onSet
        }
     }
     setPinInput('');
+    setConfirmPin('');
   };
 
   const handlePinSubmit = () => {
@@ -59,6 +60,7 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ users, onLogin, onCancel, onSet
     }
     if (pinInput !== confirmPin) {
       alert("PINs do not match");
+      setConfirmPin('');
       return;
     }
     onSetPin(selectedUser.id, pinInput);
@@ -110,14 +112,21 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ users, onLogin, onCancel, onSet
   };
 
   const handleDelete = () => {
-      if (mode === 'set_pin' && confirmPin.length > 0) {
-           setConfirmPin(prev => prev.slice(0, -1));
+      if (mode === 'set_pin' && pinInput.length === 4) {
+          // If we are in confirm mode
+          if (confirmPin.length > 0) {
+              setConfirmPin(prev => prev.slice(0, -1));
+          } else {
+              // If confirm is empty, backspace into the first pin input
+              setPinInput(prev => prev.slice(0, -1));
+          }
       } else {
            setPinInput(prev => prev.slice(0, -1));
       }
   };
 
   // Render Numeric Keypad
+  // target determines which state updater to use, but handleDelete handles logic based on state
   const renderKeypad = (target: 'pin' | 'confirm' = 'pin') => (
       <div className="grid grid-cols-3 gap-4 mt-6 max-w-[240px] mx-auto">
           {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(num => (
@@ -205,53 +214,52 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ users, onLogin, onCancel, onSet
   }
 
   if (mode === 'set_pin') {
+      const isConfirming = pinInput.length === 4;
+      
       return (
           <div className="fixed inset-0 z-50 bg-slate-50/95 flex flex-col items-center justify-center p-4">
                <h3 className="text-2xl font-bold text-slate-800 mb-2">Set Your PIN</h3>
                <p className="text-slate-500 mb-8 max-w-xs text-center">Secure your parent account with a 4-digit code.</p>
                
-               <div className="flex flex-col gap-8 w-full max-w-sm">
-                   <div>
-                       <label className="block text-xs font-bold uppercase text-slate-400 mb-2 text-center">Enter New PIN</label>
-                       <div className="flex gap-4 justify-center mb-4">
+               <div className="flex flex-col gap-8 w-full max-w-sm items-center">
+                   {/* Step 1: Enter PIN (Always shown, maybe faded if confirming) */}
+                   <div className={`transition-opacity ${isConfirming ? 'opacity-50' : 'opacity-100'}`}>
+                       <label className="block text-xs font-bold uppercase text-slate-400 mb-2 text-center">New PIN</label>
+                       <div className="flex gap-4 justify-center">
                           {[0, 1, 2, 3].map(i => (
                               <div key={i} className={`w-4 h-4 rounded-full border border-slate-300 ${pinInput.length > i ? 'bg-blue-600 border-blue-600' : 'bg-white'}`}></div>
                           ))}
                        </div>
-                       {renderKeypad('pin')}
                    </div>
 
-                   {pinInput.length === 4 && (
+                   {/* Step 2: Confirm PIN */}
+                   {isConfirming && (
                        <div className="animate-in fade-in slide-in-from-bottom-4">
                            <label className="block text-xs font-bold uppercase text-slate-400 mb-2 text-center">Confirm PIN</label>
-                           <div className="flex gap-4 justify-center mb-4">
+                           <div className="flex gap-4 justify-center">
                               {[0, 1, 2, 3].map(i => (
                                   <div key={i} className={`w-4 h-4 rounded-full border border-slate-300 ${confirmPin.length > i ? 'bg-green-600 border-green-600' : 'bg-white'}`}></div>
                               ))}
                            </div>
-                           {/* Keypad reused, logic handled by button context or simple state switch if complex */}
-                           {/* Simplified: For Set PIN, we use same keypad but specific Confirm State logic handled above is tricky with one keypad renderer.
-                               Let's just use the main keypad for both phases sequentially or split visually.
-                               Actually, to keep it simple: Just one keypad, input resets for confirmation step? 
-                               Let's do: Input 4 -> Auto switch to Confirm step.
-                           */}
                        </div>
                    )}
                    
-                   <div className="text-center">
-                        {confirmPin.length === 0 && pinInput.length === 4 && (
-                            <p className="text-sm text-slate-500 mb-4">Re-enter PIN below to confirm</p>
-                        )}
-                        {confirmPin.length > 0 && renderKeypad('confirm')}
-                   </div>
+                   {/* Single Keypad that swaps logic based on state */}
+                   {renderKeypad(isConfirming ? 'confirm' : 'pin')}
 
-                   <button 
-                        onClick={handleSetPinSubmit}
-                        disabled={pinInput.length !== 4 || confirmPin.length !== 4}
-                        className="bg-blue-600 text-white px-8 py-3 rounded-full font-bold text-lg disabled:opacity-50 mx-auto"
-                   >
-                        Save PIN
-                   </button>
+                   <div className="mt-4 flex flex-col items-center gap-2">
+                       {isConfirming && (
+                           <p className="text-sm text-slate-500">Re-enter PIN to confirm</p>
+                       )}
+                       
+                       <button 
+                            onClick={handleSetPinSubmit}
+                            disabled={pinInput.length !== 4 || confirmPin.length !== 4}
+                            className={`bg-blue-600 text-white px-8 py-3 rounded-full font-bold text-lg transition-all ${pinInput.length === 4 && confirmPin.length === 4 ? 'opacity-100 scale-105' : 'opacity-0 scale-95 pointer-events-none'}`}
+                       >
+                            Save PIN
+                       </button>
+                   </div>
                </div>
           </div>
       );
