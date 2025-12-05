@@ -1,12 +1,14 @@
 
 import React, { useState, useEffect } from 'react';
-import { User, CalendarEvent, Chore, Meal, MealType, Photo, UserRole } from '../types';
+import { User, CalendarEvent, Chore, Meal, MealType, Photo, UserRole, CalendarSource, WeatherData } from '../types';
 import { 
   Calendar, CheckSquare, Settings, Coffee, Utensils, 
   Image as ImageIcon, Moon, ChevronLeft, ChevronRight,
   CloudSun, Clock, Play, Pause, RefreshCw, X, LogOut,
-  Sparkles, PartyPopper, Sun, Sunrise, Sunset, Undo, Trophy
+  Sparkles, PartyPopper, Sun, Sunrise, Sunset, Undo, Trophy, MapPin, CloudRain, CloudSnow, Cloud, Plus
 } from 'lucide-react';
+import { fetchWeather } from '../services/weatherService';
+import { createGoogleCalendarEvent } from '../services/googleService';
 
 interface FamilyWallDashboardProps {
   familyName: string;
@@ -39,7 +41,6 @@ const isChoreScheduledForToday = (chore: Chore): boolean => {
   }
   
   if (chore.frequency === 'weekly') {
-    // Check if config matches today's name (Case insensitive just to be safe)
     return chore.frequencyConfig.toLowerCase() === dayName.toLowerCase();
   }
 
@@ -50,7 +51,7 @@ const isChoreScheduledForToday = (chore: Chore): boolean => {
   return false;
 };
 
-// CSS for Confetti Animation
+// ... ConfettiStyles remains same
 const ConfettiStyles = () => (
   <style>{`
     @keyframes bang {
@@ -87,9 +88,15 @@ const FamilyWallDashboard: React.FC<FamilyWallDashboardProps> = ({
   const [activeTab, setActiveTab] = useState<'calendar' | 'chores' | 'meals' | 'photos'>('calendar');
   const [currentTime, setCurrentTime] = useState(new Date());
   
+  // Weather State
+  const [weather, setWeather] = useState<WeatherData | null>(null);
+  const [showWeatherModal, setShowWeatherModal] = useState(false);
+
   // Calendar State
   const [calendarMode, setCalendarMode] = useState<CalendarViewMode>('week');
   const [calendarDate, setCalendarDate] = useState(new Date());
+  const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
+  const [showAddEventModal, setShowAddEventModal] = useState(false);
 
   // Photo Frame State
   const [currentPhotoIdx, setCurrentPhotoIdx] = useState(0);
@@ -106,7 +113,17 @@ const FamilyWallDashboard: React.FC<FamilyWallDashboardProps> = ({
   // Grand Celebration State
   const [showGrandCelebration, setShowGrandCelebration] = useState<string | null>(null); // Kid ID
 
-  // Apply activeTabOverride if present (for idle timer)
+  // --- ADD EVENT STATE ---
+  const [newEventTitle, setNewEventTitle] = useState('');
+  const [newEventStart, setNewEventStart] = useState('');
+  const [newEventEnd, setNewEventEnd] = useState('');
+  const [newEventDesc, setNewEventDesc] = useState('');
+  const [isSubmittingEvent, setIsSubmittingEvent] = useState(false);
+  // We need to fetch the writable calendars when opening the modal
+  const [writableCalendars, setWritableCalendars] = useState<CalendarSource[]>([]);
+  const [selectedCalendarId, setSelectedCalendarId] = useState('');
+
+  // Apply activeTabOverride
   useEffect(() => {
     if (activeTabOverride) {
         setActiveTab(activeTabOverride);
@@ -114,9 +131,18 @@ const FamilyWallDashboard: React.FC<FamilyWallDashboardProps> = ({
     }
   }, [activeTabOverride]);
 
-  // Clock ticker
+  // Clock & Weather
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 60000);
+    
+    // Fetch weather on mount
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(async (pos) => {
+            const data = await fetchWeather(pos.coords.latitude, pos.coords.longitude);
+            if (data) setWeather(data);
+        });
+    }
+
     return () => clearInterval(timer);
   }, []);
 
@@ -131,11 +157,11 @@ const FamilyWallDashboard: React.FC<FamilyWallDashboardProps> = ({
     return () => clearInterval(interval);
   }, [activeTab, isPlaying, isSynced, photos.length]);
 
-  // Calendar Logic
+  // --- CALENDAR LOGIC ---
   const getWeekStart = (date: Date) => {
     const d = new Date(date);
     const day = d.getDay();
-    const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Adjust when day is sunday to start on Monday
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1); 
     return new Date(d.setDate(diff));
   };
 
@@ -144,24 +170,12 @@ const FamilyWallDashboard: React.FC<FamilyWallDashboardProps> = ({
     const month = date.getMonth();
     const firstDay = new Date(year, month, 1);
     const lastDay = new Date(year, month + 1, 0);
-    
-    // Get padding days from previous month to start grid on Monday
     const startPadding = (firstDay.getDay() + 6) % 7; 
     const days: Date[] = [];
-
-    // Previous month days
-    for (let i = startPadding; i > 0; i--) {
-        days.push(new Date(year, month, 1 - i));
-    }
-    // Current month days
-    for (let i = 1; i <= lastDay.getDate(); i++) {
-        days.push(new Date(year, month, i));
-    }
-    // Next month days to fill grid (42 cells total usually covers all)
+    for (let i = startPadding; i > 0; i--) days.push(new Date(year, month, 1 - i));
+    for (let i = 1; i <= lastDay.getDate(); i++) days.push(new Date(year, month, i));
     const remaining = 42 - days.length;
-    for (let i = 1; i <= remaining; i++) {
-        days.push(new Date(year, month + 1, i));
-    }
+    for (let i = 1; i <= remaining; i++) days.push(new Date(year, month + 1, i));
     return days;
   };
 
@@ -175,15 +189,12 @@ const FamilyWallDashboard: React.FC<FamilyWallDashboardProps> = ({
         return d;
       });
     }
-    if (calendarMode === 'month') {
-        return getMonthDays(calendarDate);
-    }
+    if (calendarMode === 'month') return getMonthDays(calendarDate);
     return [];
   };
 
   const currentDates = getCalendarDates();
   
-  // Use weekDates for Meal Planner specifically (always next 7 days from today, or current week)
   const mealDates = Array.from({ length: 7 }).map((_, i) => {
     const d = getWeekStart(new Date()); 
     d.setDate(d.getDate() + i);
@@ -238,7 +249,6 @@ const FamilyWallDashboard: React.FC<FamilyWallDashboardProps> = ({
   };
 
   const handleChoreClick = (chore: Chore, kidId: string) => {
-      // Permission check
       const isParent = currentUser?.role === UserRole.PARENT;
       const isAssignedKid = currentUser?.id === kidId;
       const isKiosk = !currentUser;
@@ -257,19 +267,11 @@ const FamilyWallDashboard: React.FC<FamilyWallDashboardProps> = ({
 
   const confirmChoreCompletion = () => {
       if (!selectedChore || !selectedKidId) return;
-      
       const choreId = selectedChore.id;
       const kidId = selectedKidId;
-
-      // 1. Trigger normal toggle
       onToggleChore(choreId, kidId);
-      
-      // 2. Check for GRAND CELEBRATION Logic
-      const kidChores = chores.filter(c => 
-         c.assignments.some(a => a.userId === kidId) && isChoreScheduledForToday(c)
-      );
+      const kidChores = chores.filter(c => c.assignments.some(a => a.userId === kidId) && isChoreScheduledForToday(c));
       const currentlyCompletedCount = kidChores.filter(c => c.completedBy.includes(kidId)).length;
-      
       if (currentlyCompletedCount + 1 === kidChores.length) {
           setShowGrandCelebration(kidId);
           setTimeout(() => setShowGrandCelebration(null), 5000);
@@ -277,18 +279,10 @@ const FamilyWallDashboard: React.FC<FamilyWallDashboardProps> = ({
           setShowConfetti(true);
           setTimeout(() => setShowConfetti(false), 2500);
       }
-      
-      setUndoState({
-          choreId: choreId,
-          kidId: kidId
-      });
-      
+      setUndoState({ choreId: choreId, kidId: kidId });
       setSelectedChore(null);
       setSelectedKidId(null);
-
-      setTimeout(() => {
-          setUndoState(prev => prev?.choreId === choreId ? null : prev);
-      }, 5000);
+      setTimeout(() => { setUndoState(prev => prev?.choreId === choreId ? null : prev); }, 5000);
   };
 
   const handleUndoAction = () => {
@@ -298,8 +292,85 @@ const FamilyWallDashboard: React.FC<FamilyWallDashboardProps> = ({
       }
   };
 
+  // --- ADD EVENT LOGIC ---
+  const handleOpenAddEvent = () => {
+      // Find calendar sources that we have access to
+      const dbStr = localStorage.getItem('FAMILY_DB');
+      const activeId = localStorage.getItem('ACTIVE_FAMILY_ID');
+      if (dbStr && activeId) {
+          const db = JSON.parse(dbStr);
+          const state = db[activeId];
+          if (state && state.calendarSources) {
+             const writables = state.calendarSources.filter((s: CalendarSource) => s.accessRole === 'writer' || s.accessRole === 'owner');
+             if (writables.length === 0 && state.googleAccessToken) {
+                 // Fallback: If we have a token but no sources explicitly synced yet, assume primary is available if we add it
+                 // For now, let's just use the sources we have. If none, user needs to sync one first.
+                 // Actually, let's allow "primary" if token exists
+             }
+             setWritableCalendars(writables);
+             if (writables.length > 0) setSelectedCalendarId(writables[0].googleCalendarId);
+          }
+      }
+      
+      const now = new Date();
+      now.setMinutes(0);
+      const nextHour = new Date(now);
+      nextHour.setHours(now.getHours() + 1);
+      
+      setNewEventTitle('');
+      setNewEventDesc('');
+      setNewEventStart(now.toISOString().slice(0, 16));
+      setNewEventEnd(nextHour.toISOString().slice(0, 16));
+      setShowAddEventModal(true);
+  };
+
+  const handleCreateEvent = async () => {
+      if (!newEventTitle || !selectedCalendarId) return;
+      
+      // Get token from storage indirectly via the DB state (since we don't pass it as prop here, need to fetch from state or pass it)
+      // Ideally should pass via props, but for now lets try to get it from local storage safely
+      const dbStr = localStorage.getItem('FAMILY_DB');
+      const activeId = localStorage.getItem('ACTIVE_FAMILY_ID');
+      if (!dbStr || !activeId) return;
+      const db = JSON.parse(dbStr);
+      const state = db[activeId];
+      const token = state.googleAccessToken;
+
+      if (!token) {
+          alert("No Google Account linked with write permissions.");
+          return;
+      }
+
+      setIsSubmittingEvent(true);
+      try {
+          await createGoogleCalendarEvent(token, selectedCalendarId, {
+              summary: newEventTitle,
+              description: newEventDesc,
+              start: { dateTime: new Date(newEventStart).toISOString() },
+              end: { dateTime: new Date(newEventEnd).toISOString() }
+          });
+          alert("Event created! Refreshing...");
+          setShowAddEventModal(false);
+          // Trigger a refresh somehow? The App component polls every 15 min. 
+          // We can force a reload or wait. For now, simply close.
+          window.location.reload(); 
+      } catch (e) {
+          console.error(e);
+          alert("Failed to create event. Ensure you granted Calendar Write permissions in Settings.");
+      }
+      setIsSubmittingEvent(false);
+  };
+
   const getDayName = (date: Date) => date.toLocaleDateString('en-US', { weekday: 'short' });
   const getDateNum = (date: Date) => date.getDate();
+  const getWeatherIcon = (code: number) => {
+      if (code <= 3) return <Sun size={24} className="text-yellow-500"/>;
+      if (code <= 48) return <Cloud size={24} className="text-slate-400"/>;
+      if (code <= 67) return <CloudRain size={24} className="text-blue-400"/>;
+      if (code <= 82) return <CloudRain size={24} className="text-blue-600"/>;
+      if (code <= 99) return <CloudSnow size={24} className="text-indigo-300"/>;
+      return <Sun size={24}/>;
+  };
 
   const celebratingKid = users.find(u => u.id === showGrandCelebration);
 
@@ -323,7 +394,6 @@ const FamilyWallDashboard: React.FC<FamilyWallDashboardProps> = ({
         </nav>
 
         <div className="flex flex-col gap-4 mt-auto">
-            {/* Generic Settings Button that asks 'Who is here?' */}
             <button 
                 onClick={onSettingsClick}
                 className="flex flex-col items-center gap-1 text-slate-400 hover:text-slate-600 transition-colors"
@@ -370,18 +440,24 @@ const FamilyWallDashboard: React.FC<FamilyWallDashboardProps> = ({
             )}
             
             <div className="flex items-center gap-4">
-               <div className="flex items-center gap-2 text-slate-600 bg-slate-100 px-3 py-1.5 rounded-full text-sm">
-                  <CloudSun size={18} className="text-orange-400"/>
-                  <span className="hidden md:inline">72° Sunny</span>
-               </div>
+               {/* Weather Widget */}
+               {weather && (
+                   <button onClick={() => setShowWeatherModal(true)} className="flex items-center gap-2 text-slate-600 bg-slate-100 px-3 py-1.5 rounded-full text-sm hover:bg-blue-50 hover:text-blue-600 transition-colors">
+                      {getWeatherIcon(weather.current.code)}
+                      <span className="font-bold">{weather.current.temp}°F</span>
+                   </button>
+               )}
                
                {activeTab === 'calendar' && (
-                   <button 
-                     onClick={handleToday}
-                     className="px-3 py-1.5 bg-slate-900 text-white rounded-full text-sm font-medium hover:bg-slate-800 transition-colors"
-                   >
-                     Today
-                   </button>
+                   <>
+                     <button onClick={handleOpenAddEvent} className="p-2 bg-blue-600 text-white rounded-full hover:bg-blue-700 transition-colors shadow-md"><Plus size={20}/></button>
+                     <button 
+                       onClick={handleToday}
+                       className="px-3 py-1.5 bg-slate-900 text-white rounded-full text-sm font-medium hover:bg-slate-800 transition-colors"
+                     >
+                       Today
+                     </button>
+                   </>
                )}
             </div>
           </header>
@@ -424,7 +500,7 @@ const FamilyWallDashboard: React.FC<FamilyWallDashboardProps> = ({
                                          <div className="flex-1 border-l-2 border-slate-100 pl-8 space-y-4">
                                              {dayEvents.length === 0 && <p className="text-slate-400 italic text-xl">No events scheduled.</p>}
                                              {dayEvents.map(ev => (
-                                                 <div key={ev.id} className={`bg-opacity-20 p-6 rounded-2xl border-l-8 ${ev.color.replace('bg-', 'border-').replace('text-', 'border-')}`}>
+                                                 <div key={ev.id} onClick={() => setSelectedEvent(ev)} className={`bg-opacity-20 p-6 rounded-2xl border-l-8 cursor-pointer hover:scale-[1.01] transition-transform ${ev.color.replace('bg-', 'border-').replace('text-', 'border-')}`}>
                                                      <h4 className="text-2xl font-bold text-slate-800">{ev.title}</h4>
                                                      <p className="text-slate-600 text-lg mt-1">
                                                         {new Date(ev.start).toLocaleTimeString([], {hour: 'numeric', minute:'2-digit'})} - 
@@ -440,7 +516,7 @@ const FamilyWallDashboard: React.FC<FamilyWallDashboardProps> = ({
                                 <div key={idx} className={`min-h-[100px] border-r border-b border-slate-100 p-2 flex flex-col gap-1 transition-colors ${!isCurrentMonth && calendarMode === 'month' ? 'bg-slate-50/50 text-slate-300' : 'bg-white'} ${isToday ? 'ring-inset ring-2 ring-blue-200 bg-blue-50/30' : ''}`}>
                                     <div className="flex justify-between items-start"><span className={`text-sm font-medium w-7 h-7 flex items-center justify-center rounded-full ${isToday ? 'bg-blue-600 text-white' : (isCurrentMonth ? 'text-slate-700' : 'text-slate-300')}`}>{getDateNum(date)}</span></div>
                                     <div className="flex-1 flex flex-col gap-1 overflow-hidden">
-                                        {dayEvents.slice(0, 4).map(event => (<div key={event.id} className={`text-xs truncate px-1.5 py-0.5 rounded border-l-2 ${event.color}`}>{event.title}</div>))}
+                                        {dayEvents.slice(0, 4).map(event => (<div key={event.id} onClick={() => setSelectedEvent(event)} className={`text-xs truncate px-1.5 py-0.5 rounded border-l-2 cursor-pointer hover:brightness-95 ${event.color}`}>{event.title}</div>))}
                                         {dayEvents.length > 4 && (<span className="text-[10px] text-slate-400 pl-1">+{dayEvents.length - 4} more</span>)}
                                     </div>
                                 </div>
@@ -456,6 +532,7 @@ const FamilyWallDashboard: React.FC<FamilyWallDashboardProps> = ({
         {/* Chores View */}
         {activeTab === 'chores' && (
            <div className="flex-1 overflow-y-auto p-8 max-w-7xl mx-auto w-full">
+              {/* ... existing chores content ... */}
               <h2 className="text-3xl font-serif text-slate-800 mb-8 flex items-center gap-3">
                   <Sparkles className="text-yellow-500" /> Today's Chores
               </h2>
@@ -563,6 +640,111 @@ const FamilyWallDashboard: React.FC<FamilyWallDashboardProps> = ({
               <div className="absolute top-0 right-0 h-full w-1/4 z-20 cursor-e-resize" onClick={() => setCurrentPhotoIdx(prev => (prev + 1) % photos.length)}></div>
               {showSyncModal && (<div className="absolute inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"><div className="bg-white rounded-2xl max-w-md w-full p-8 text-center relative"><button onClick={() => setShowSyncModal(false)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-800"><X/></button><div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-6"><ImageIcon size={32} /></div><h3 className="text-2xl font-bold text-slate-800 mb-2">Connect Google Photos</h3><p className="text-slate-500 mb-8">Access your family albums to display on the wall.</p><button onClick={handleSyncPhotos} className="w-full flex items-center justify-center gap-3 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-medium py-3 px-4 rounded-xl transition-all">Link Google Account</button></div></div>)}
            </div>
+        )}
+
+        {/* --- MODALS --- */}
+
+        {/* 1. WEATHER MODAL */}
+        {showWeatherModal && weather && (
+            <div className="absolute inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
+                <div className="bg-white/90 backdrop-blur-xl rounded-3xl p-8 max-w-4xl w-full shadow-2xl relative border border-white/20">
+                     <button onClick={() => setShowWeatherModal(false)} className="absolute top-6 right-6 p-2 bg-slate-100 rounded-full hover:bg-slate-200"><X/></button>
+                     <div className="text-center mb-10">
+                         <div className="inline-block p-4 rounded-full bg-blue-100 mb-4">{getWeatherIcon(weather.current.code)}</div>
+                         <h2 className="text-6xl font-black text-slate-800 tracking-tight">{weather.current.temp}°</h2>
+                         <p className="text-xl text-slate-500 font-medium">Current Forecast</p>
+                     </div>
+                     <div className="grid grid-cols-7 gap-4">
+                         {weather.daily.map((day) => (
+                             <div key={day.date} className="bg-white/50 rounded-2xl p-4 flex flex-col items-center gap-2 border border-white/40 shadow-sm">
+                                 <p className="text-xs font-bold uppercase text-slate-400">{new Date(day.date).toLocaleDateString('en-US', {weekday: 'short'})}</p>
+                                 <div className="my-2">{getWeatherIcon(day.code)}</div>
+                                 <div className="flex flex-col items-center">
+                                     <span className="text-lg font-bold text-slate-700">{day.max}°</span>
+                                     <span className="text-sm font-medium text-slate-400">{day.min}°</span>
+                                 </div>
+                             </div>
+                         ))}
+                     </div>
+                </div>
+            </div>
+        )}
+
+        {/* 2. EVENT DETAILS MODAL */}
+        {selectedEvent && (
+            <div className="absolute inset-0 z-[90] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
+                <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl relative border-l-8 border-l-blue-500">
+                    <button onClick={() => setSelectedEvent(null)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"><X/></button>
+                    <h3 className="text-2xl font-bold text-slate-800 mb-2">{selectedEvent.title}</h3>
+                    <p className="text-lg text-slate-600 font-medium mb-6">
+                        {new Date(selectedEvent.start).toLocaleDateString(undefined, {weekday: 'long', month: 'long', day: 'numeric'})}
+                        <br/>
+                        <span className="text-slate-500 text-base">
+                            {new Date(selectedEvent.start).toLocaleTimeString([], {hour: 'numeric', minute:'2-digit'})} - {new Date(selectedEvent.end).toLocaleTimeString([], {hour: 'numeric', minute:'2-digit'})}
+                        </span>
+                    </p>
+                    {selectedEvent.description && (
+                        <div className="bg-slate-50 p-4 rounded-xl text-slate-600 text-sm mb-4 border border-slate-100">
+                            {selectedEvent.description}
+                        </div>
+                    )}
+                     {selectedEvent.location && (
+                        <div className="flex items-center gap-2 text-slate-500 text-sm">
+                            <MapPin size={16}/> {selectedEvent.location}
+                        </div>
+                    )}
+                </div>
+            </div>
+        )}
+
+        {/* 3. ADD EVENT MODAL */}
+        {showAddEventModal && (
+            <div className="absolute inset-0 z-[90] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
+                <div className="bg-white rounded-3xl p-8 max-w-lg w-full shadow-2xl relative">
+                     <button onClick={() => setShowAddEventModal(false)} className="absolute top-6 right-6 text-slate-400 hover:text-slate-600"><X/></button>
+                     <h3 className="text-2xl font-bold text-slate-800 mb-6">Add New Event</h3>
+                     
+                     {writableCalendars.length === 0 ? (
+                         <div className="text-center py-8">
+                             <p className="text-slate-500 mb-4">No writable calendars found. Please sync a calendar with "Writer" or "Owner" access in Settings.</p>
+                             <button onClick={() => setShowAddEventModal(false)} className="text-blue-600 font-bold hover:underline">Close</button>
+                         </div>
+                     ) : (
+                         <div className="space-y-4">
+                             <div>
+                                 <label className="block text-sm font-bold text-slate-500 mb-1">Event Title</label>
+                                 <input type="text" value={newEventTitle} onChange={e => setNewEventTitle(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500"/>
+                             </div>
+                             <div className="grid grid-cols-2 gap-4">
+                                 <div>
+                                    <label className="block text-sm font-bold text-slate-500 mb-1">Starts</label>
+                                    <input type="datetime-local" value={newEventStart} onChange={e => setNewEventStart(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-3 outline-none focus:ring-2 focus:ring-blue-500 text-sm"/>
+                                 </div>
+                                 <div>
+                                    <label className="block text-sm font-bold text-slate-500 mb-1">Ends</label>
+                                    <input type="datetime-local" value={newEventEnd} onChange={e => setNewEventEnd(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-3 outline-none focus:ring-2 focus:ring-blue-500 text-sm"/>
+                                 </div>
+                             </div>
+                             <div>
+                                 <label className="block text-sm font-bold text-slate-500 mb-1">Add to Calendar</label>
+                                 <select value={selectedCalendarId} onChange={e => setSelectedCalendarId(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500">
+                                     {writableCalendars.map(cal => (
+                                         <option key={cal.googleCalendarId} value={cal.googleCalendarId}>{cal.name} ({cal.accessRole})</option>
+                                     ))}
+                                 </select>
+                             </div>
+                             <div>
+                                 <label className="block text-sm font-bold text-slate-500 mb-1">Description (Optional)</label>
+                                 <textarea value={newEventDesc} onChange={e => setNewEventDesc(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500 h-24"/>
+                             </div>
+                             
+                             <button onClick={handleCreateEvent} disabled={isSubmittingEvent} className="w-full bg-blue-600 text-white font-bold py-4 rounded-xl hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 flex items-center justify-center gap-2">
+                                 {isSubmittingEvent ? 'Saving...' : 'Save Event'}
+                             </button>
+                         </div>
+                     )}
+                </div>
+            </div>
         )}
 
         {/* Task Completion Modal */}

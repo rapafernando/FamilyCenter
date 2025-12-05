@@ -195,6 +195,8 @@ export const fetchGoogleCalendarEvents = async (
     return data.items.map((item: any) => ({
       id: item.id,
       title: prefix ? `${prefix} ${item.summary}` : (item.summary || 'Busy'),
+      description: item.description,
+      location: item.location,
       start: item.start.dateTime || item.start.date, // Handle all-day events
       end: item.end.dateTime || item.end.date,
       type: 'family', 
@@ -205,4 +207,36 @@ export const fetchGoogleCalendarEvents = async (
     console.error("Error fetching calendar:", error);
     return [];
   }
+};
+
+/**
+ * Creates a new event in Google Calendar
+ */
+export const createGoogleCalendarEvent = async (
+    accessToken: string,
+    calendarId: string,
+    eventDetails: {
+        summary: string;
+        description?: string;
+        start: { dateTime: string } | { date: string };
+        end: { dateTime: string } | { date: string };
+    }
+) => {
+    if (!accessToken) throw new Error("No access token");
+
+    const response = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`, {
+        method: 'POST',
+        headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(eventDetails)
+    });
+
+    if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error?.message || 'Failed to create event');
+    }
+
+    return await response.json();
 };

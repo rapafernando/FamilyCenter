@@ -71,10 +71,12 @@ export interface Reward {
 export interface CalendarEvent {
   id: string;
   title: string;
+  description?: string; // Added description
   start: string; // ISO Date string
   end: string;
   type: 'family' | 'birthday' | 'sports' | 'school';
   color: string;
+  location?: string;
 }
 
 export interface CalendarSource {
@@ -86,6 +88,7 @@ export interface CalendarSource {
   ownerId: string; // User ID of who linked it
   ownerName: string;
   accessToken: string; // Storing for prototype (Production should use refresh tokens/backend)
+  accessRole?: 'reader' | 'writer' | 'owner'; // Added to check if we can write to it
 }
 
 export interface PhotoConfig {
@@ -108,6 +111,19 @@ export interface Photo {
   url: string;
   date: string;
   location?: string;
+}
+
+export interface WeatherData {
+  current: {
+    temp: number;
+    code: number;
+  };
+  daily: Array<{
+    date: string;
+    max: number;
+    min: number;
+    code: number;
+  }>;
 }
 
 export interface AppState {

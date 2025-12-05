@@ -61,6 +61,7 @@ const ParentPortal: React.FC<ParentPortalProps> = ({
   onUpdateFamilyName, onAddUser, onDeleteUser, onAddReward, onUpdateReward, onDeleteReward, onRedeemSharedReward,
   onAddCalendarSource, onRemoveCalendarSource, onSetPhotoConfig, onSetGoogleToken
 }) => {
+  // ... existing logic remains same ...
   const [activeTab, setActiveTab] = useState<'overview' | 'chores' | 'rewards' | 'settings' | 'history' | 'integrations'>('overview');
   const [newName, setNewName] = useState('');
   const [newRole, setNewRole] = useState<UserRole>(UserRole.KID);
@@ -208,31 +209,44 @@ const ParentPortal: React.FC<ParentPortalProps> = ({
       setApprovalCosts(newCosts);
   };
 
+  // UPDATED: Grant Access Logic
   const handleGoogleLink = (forceConsent = false) => {
-      initGoogleClient((response) => {
-          if(response && response.access_token) {
-              // VERIFY SCOPES
-              // If we triggered a forced consent flow to fix photos, we MUST ensure the user actually checked the box.
-              if (forceConsent) {
-                  const grantedScopes = response.scope || "";
-                  const hasPhotosScope = grantedScopes.includes("photoslibrary.readonly");
-                  
-                  if (!hasPhotosScope) {
-                      alert("⚠️ ACTION REQUIRED\n\nYou did not grant access to Google Photos. Please click 'Grant Photos Access' again and make sure to CHECK the box next to 'Google Photos' in the popup window.");
-                      return; // Stop. Do not save this token.
+      const proceedWithLogin = () => {
+          initGoogleClient((response) => {
+              if(response && response.access_token) {
+                  // Verify scopes
+                  if (forceConsent) {
+                      const grantedScopes = response.scope || "";
+                      const hasPhotosScope = grantedScopes.includes("photoslibrary.readonly");
+                      
+                      if (!hasPhotosScope) {
+                          alert("⚠️ ACTION REQUIRED\n\nYou did not grant access to Google Photos. Please click 'Grant Photos Access' again and make sure to CHECK the box next to 'Google Photos' in the popup window.");
+                          return; 
+                      }
                   }
-              }
 
-              onSetGoogleToken(response.access_token);
-              setCalError(null);
-              setPhotoError(null);
-              setFetchedCalendars([]);
-              setFetchedAlbums([]);
-              fetchCalendarList(response.access_token).then(setFetchedCalendars).catch(e => setCalError(e.message));
-              fetchAlbums(response.access_token).then(setFetchedAlbums).catch(e => setPhotoError(e.message));
-          }
-      });
-      signInWithGoogle(forceConsent ? { prompt: 'consent' } : undefined);
+                  onSetGoogleToken(response.access_token);
+                  setCalError(null);
+                  setPhotoError(null);
+                  setFetchedCalendars([]);
+                  setFetchedAlbums([]);
+                  fetchCalendarList(response.access_token).then(setFetchedCalendars).catch(e => setCalError(e.message));
+                  fetchAlbums(response.access_token).then(setFetchedAlbums).catch(e => setPhotoError(e.message));
+              }
+          });
+          signInWithGoogle(forceConsent ? { prompt: 'consent' } : undefined);
+      };
+
+      if (forceConsent && googleAccessToken) {
+          // Revoke first to clear any stale state
+          revokeToken(googleAccessToken, () => {
+              // We don't clear the token from state immediately to avoid UI flickers, 
+              // but the browser session is cleared.
+              proceedWithLogin();
+          });
+      } else {
+          proceedWithLogin();
+      }
   };
 
   const handleResetPermissions = () => {
@@ -261,10 +275,11 @@ const ParentPortal: React.FC<ParentPortalProps> = ({
       setRefreshingPhotos(false);
   };
 
-  const handleSyncCalendar = (cal: any) => { if (!googleAccessToken) return; onAddCalendarSource({ id: `src-${Date.now()}`, googleCalendarId: cal.id, name: cal.summary, color: selectedCalColor, type: selectedCalType, ownerId: currentUser.id, ownerName: currentUser.name, accessToken: googleAccessToken }); };
+  const handleSyncCalendar = (cal: any) => { if (!googleAccessToken) return; onAddCalendarSource({ id: `src-${Date.now()}`, googleCalendarId: cal.id, name: cal.summary, color: selectedCalColor, type: selectedCalType, ownerId: currentUser.id, ownerName: currentUser.name, accessToken: googleAccessToken, accessRole: cal.accessRole }); };
   const handleSyncAlbum = (album: any) => { if (!googleAccessToken) return; onSetPhotoConfig({ albumId: album.id, albumName: album.title, accessToken: googleAccessToken }); };
 
   const renderFreqConfig = () => {
+      // ... existing code ...
       if (frequency === 'daily') {
           return (
               <div className="flex gap-4 mt-2">
@@ -363,6 +378,7 @@ const ParentPortal: React.FC<ParentPortalProps> = ({
                 </div>
             </div>
         )}
+        {/* ... Chores and Rewards tabs remain similar ... */}
         {activeTab === 'chores' && (
           <div className="space-y-8">
              <div className="flex items-center justify-between"><div><h2 className="text-2xl font-bold text-slate-800">Chore Management</h2><p className="text-slate-500">Create tasks and assign them to your kids.</p></div><button onClick={() => { resetForm(); setIsCreatingChore(!isCreatingChore); }} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl font-bold flex items-center gap-2 transition-colors">{isCreatingChore ? 'Cancel' : <><Plus size={20} /> Add New Chore</>}</button></div>
@@ -373,6 +389,7 @@ const ParentPortal: React.FC<ParentPortalProps> = ({
         {activeTab === 'rewards' && (
            <div className="space-y-6">
                 <div className="flex items-center justify-between"><div><h2 className="text-2xl font-bold text-slate-800">Rewards Center</h2><p className="text-slate-500">Manage wishlist items and create shared goals.</p></div><button onClick={() => { setIsCreatingReward(!isCreatingReward); setEditingRewardId(null); setRewardTitle(''); setRewardCost(100); }} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl font-bold flex items-center gap-2 transition-colors"><Plus size={20} /> Create Reward</button></div>
+                {/* ... existing reward list ... */}
                 {isCreatingReward && (<div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 animate-in fade-in slide-in-from-top-4"><h3 className="text-lg font-bold mb-4">{editingRewardId ? 'Edit Reward' : 'Create New Reward'}</h3><div className="flex gap-4 mb-4"><div className="flex-1"><label className="block text-sm font-bold text-slate-700 mb-1">Title</label><input type="text" value={rewardTitle} onChange={(e) => setRewardTitle(e.target.value)} className="w-full px-4 py-2 border rounded-xl" placeholder="e.g. Pizza Night"/></div><div className="w-32"><label className="block text-sm font-bold text-slate-700 mb-1">Cost (Pts)</label><input type="number" value={rewardCost} onChange={(e) => setRewardCost(parseInt(e.target.value))} className="w-full px-4 py-2 border rounded-xl"/></div></div><div className="mb-6"><label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={isSharedReward} onChange={(e) => setIsSharedReward(e.target.checked)} className="w-5 h-5 rounded text-blue-600"/><span className="font-bold text-slate-700 flex items-center gap-2"><Users size={18}/> Shared Reward (Split cost among all kids)</span></label><p className="text-xs text-slate-400 mt-1 ml-7">If checked, the cost will be divided by the number of kids when redeemed.</p></div><div className="flex justify-end gap-2"><button onClick={() => { setIsCreatingReward(false); setEditingRewardId(null); }} className="px-4 py-2 text-slate-500">Cancel</button><button onClick={handleSaveReward} className="px-6 py-2 bg-blue-600 text-white rounded-xl font-bold">{editingRewardId ? 'Update' : 'Save Reward'}</button></div></div>)}
                 {pendingRewards.length > 0 && (<div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200"><h3 className="font-bold text-lg mb-4 text-slate-800">Wishlist Requests (Pending)</h3><div className="space-y-3">{pendingRewards.map(item => (<div key={item.id} className="flex items-center justify-between bg-yellow-50 p-4 rounded-xl border border-yellow-100"><div className="flex items-center gap-3"><div className="w-10 h-10 bg-white rounded-full flex items-center justify-center border border-slate-200"><img src={users.find(u => u.id === item.requestedBy)?.avatar} className="w-8 h-8 rounded-full" /></div><div><p className="font-bold text-slate-800">{item.title}</p><p className="text-sm text-slate-500">Requested Cost: {item.cost} pts</p></div></div><div className="flex gap-2 items-center"><div className="flex flex-col items-end mr-2"><span className="text-[10px] font-bold text-slate-400 uppercase">Approve Cost</span><input type="number" className="w-20 px-2 py-1 text-sm border border-yellow-300 rounded text-right focus:outline-none focus:border-yellow-500" value={approvalCosts[item.id] !== undefined ? approvalCosts[item.id] : item.cost} onChange={(e) => setApprovalCosts({...approvalCosts, [item.id]: parseInt(e.target.value)})}/></div><button onClick={() => onDeleteReward(item.id)} className="px-3 py-1 text-red-500 font-bold hover:bg-red-50 rounded-lg">Deny</button><button onClick={() => handleApproveWithCost(item.id, item.cost)} className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg font-medium text-sm transition-colors">Approve</button></div></div>))}</div></div>)}
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200"><h3 className="font-bold text-lg mb-4 text-slate-800">Active Rewards</h3><div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">{activeRewards.map(reward => (<div key={reward.id} className="border border-slate-200 rounded-xl p-4 flex flex-col relative overflow-hidden group">{reward.isShared && <div className="absolute top-0 right-0 bg-blue-600 text-white text-xs font-bold px-2 py-1 rounded-bl-xl"><Users size={12} className="inline mr-1"/> Shared</div>}<div className="flex items-center gap-4 mb-4"><div className="w-12 h-12 bg-slate-100 rounded-lg overflow-hidden"><img src={reward.image} className="w-full h-full object-cover"/></div><div><h4 className="font-bold text-slate-800">{reward.title}</h4><p className="text-sm text-slate-500 font-medium">{reward.cost} pts {reward.isShared && '(Total)'}</p></div></div><div className="mt-auto flex gap-2"><div className="relative"><button onClick={() => setActiveMenuRewardId(activeMenuRewardId === reward.id ? null : reward.id)} className="p-2 text-slate-300 hover:text-slate-600"><MoreVertical size={16}/></button>{activeMenuRewardId === reward.id && (<div className="absolute bottom-full left-0 w-32 bg-white rounded-lg shadow-xl border border-slate-100 z-50 overflow-hidden mb-1"><button onClick={() => handleEditReward(reward)} className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"><Edit size={14} className="text-blue-500"/> Edit</button><button onClick={() => onDeleteReward(reward.id)} className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"><Trash2 size={14}/> Delete</button></div>)}</div>{reward.isShared && (<button onClick={() => onRedeemSharedReward(reward.id)} className="flex-1 bg-blue-100 text-blue-700 hover:bg-blue-200 py-2 rounded-lg font-bold text-sm">Redeem for Group</button>)}</div></div>))}</div></div>
@@ -383,6 +400,7 @@ const ParentPortal: React.FC<ParentPortalProps> = ({
                  <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-4"><div><h3 className="text-xl font-bold text-slate-800 flex items-center gap-2"><Link size={24} className="text-blue-500"/> Google Integrations</h3><p className="text-slate-500 mt-1">Manage your connected Google Account services.</p></div>{!isGoogleLinked ? (<button onClick={() => handleGoogleLink(false)} className="bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 px-4 py-2 rounded-xl font-bold flex items-center gap-2 transition-all shadow-sm"><svg className="w-5 h-5" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>Link Google Account</button>) : (<div className="flex items-center gap-2 text-green-600 bg-green-50 px-3 py-1.5 rounded-lg font-bold text-sm border border-green-100"><CheckCircle2 size={16}/> Account Linked</div>)}</div>
                  {isGoogleLinked && (
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-in fade-in slide-in-from-bottom-4">
+                         {/* Calendar Card */}
                          <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col"><div className="mb-4 flex items-center justify-between"><div><h4 className="font-bold text-lg text-slate-800 flex items-center gap-2"><CalIcon size={20} className="text-blue-500"/> Calendar Sync</h4><p className="text-sm text-slate-500">Choose calendars to display.</p></div><div className="flex gap-2">{calError && (<button onClick={handleResetPermissions} className="text-orange-500 hover:text-orange-600 bg-orange-50 px-3 py-1.5 rounded-lg text-xs font-bold">Reset Permissions</button>)}<button onClick={handleRefreshCalendars} disabled={refreshingCal} className="text-slate-400 hover:text-blue-600 disabled:opacity-50 transition-colors p-2 rounded-full hover:bg-slate-50" title="Refresh Calendars">{refreshingCal ? <Loader2 size={20} className="animate-spin text-blue-500"/> : <RefreshCw size={20}/>}</button></div></div>
                              <div className="bg-slate-50 p-4 rounded-xl space-y-3 mb-6">
                                  <div className="flex flex-col gap-2 mb-4 bg-white p-3 rounded-lg border border-slate-200"><span className="text-xs font-bold text-slate-400 uppercase">Configuration</span><div className="flex gap-2"><select className="px-3 py-1.5 rounded-lg border border-slate-300 text-sm flex-1 bg-white" value={selectedCalType} onChange={(e) => setSelectedCalType(e.target.value as any)}><option value="personal">Type: Personal (Prefix Name)</option><option value="family">Type: Family (No Prefix)</option></select><div className="flex gap-1 bg-slate-100 p-1 rounded-lg">{COLORS.map(c => (<button key={c.name} className={`w-6 h-6 rounded-full border-2 transition-all ${selectedCalColor === c.value ? 'ring-2 ring-offset-1 ring-slate-400 scale-110' : 'border-transparent opacity-70 hover:opacity-100'}`} onClick={() => setSelectedCalColor(c.value)} style={{backgroundColor: c.name.toLowerCase() === 'white' ? '#fff' : c.name}} title={c.name}><div className={`w-full h-full rounded-full ${c.value.split(' ')[0]}`}></div></button>))}</div></div></div>
