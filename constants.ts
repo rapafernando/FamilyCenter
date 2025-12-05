@@ -1,5 +1,5 @@
 
-import { User, Chore, Reward, CalendarEvent, UserRole, Meal, Photo } from './types';
+import { User, Chore, Reward, CalendarEvent, UserRole, Meal, Photo, ChoreLog } from './types';
 
 // Default initial state for a fresh app
 // We need at least one parent to allow login and configuration
@@ -15,6 +15,7 @@ export const INITIAL_USERS: User[] = [
 ];
 
 export const INITIAL_CHORES: Chore[] = [];
+export const INITIAL_CHORE_LOGS: ChoreLog[] = []; // New empty log
 
 export const INITIAL_REWARDS: Reward[] = [
   {

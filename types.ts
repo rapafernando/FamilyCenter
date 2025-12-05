@@ -34,6 +34,18 @@ export interface Chore {
   icon: string; // SVG String
 }
 
+// New Interface for Historical Tracking
+export interface ChoreLog {
+  id: string;
+  choreId: string;
+  choreTitle: string;
+  userId: string;
+  userName: string;
+  points: number;
+  date: string; // ISO Date YYYY-MM-DD
+  timestamp: string; // Full ISO timestamp
+}
+
 export interface Reward {
   id: string;
   title: string;
@@ -72,6 +84,7 @@ export interface AppState {
   familyName: string;
   users: User[];
   chores: Chore[];
+  choreHistory: ChoreLog[]; // New history array
   rewards: Reward[];
   events: CalendarEvent[];
   meals: Meal[];

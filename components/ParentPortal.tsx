@@ -1,12 +1,14 @@
 
 import React, { useState } from 'react';
-import { User, Chore, Reward, UserRole, TimeOfDay, ChoreFrequency } from '../types';
-import { Calendar as CalIcon, CheckSquare, Settings, Plus, Trash2, UserPlus, Save, Clock, Repeat, MoreVertical, Edit, Copy } from 'lucide-react';
+import { User, Chore, Reward, UserRole, TimeOfDay, ChoreFrequency, ChoreLog } from '../types';
+import { Calendar as CalIcon, CheckSquare, Settings, Plus, Trash2, UserPlus, Save, Clock, Repeat, MoreVertical, Edit, Copy, BarChart2, TrendingUp, History } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line } from 'recharts';
 
 interface ParentPortalProps {
   familyName: string;
   users: User[];
   chores: Chore[];
+  choreHistory?: ChoreLog[]; // New prop
   rewards: Reward[];
   onAddChore: (chore: Omit<Chore, 'id'>) => void;
   onUpdateChore: (chore: Chore) => void;
@@ -32,11 +34,11 @@ const CHORE_ICONS = [
 ];
 
 const ParentPortal: React.FC<ParentPortalProps> = ({ 
-  familyName, users, chores, rewards, 
+  familyName, users, chores, rewards, choreHistory = [],
   onAddChore, onUpdateChore, onDeleteChore, onApproveReward, 
   onUpdateFamilyName, onAddUser, onDeleteUser 
 }) => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'chores' | 'rewards' | 'settings'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'chores' | 'rewards' | 'settings' | 'history'>('overview');
   
   // Settings Form State
   const [newName, setNewName] = useState('');
@@ -219,6 +221,31 @@ const ParentPortal: React.FC<ParentPortalProps> = ({
       }
   };
 
+  // Analytics Helpers
+  const getWeeklyPointsData = () => {
+     // Get last 7 days
+     const dates = Array.from({length: 7}, (_, i) => {
+         const d = new Date();
+         d.setDate(d.getDate() - (6 - i));
+         return d.toISOString().split('T')[0];
+     });
+
+     return dates.map(date => {
+         const entry: any = { date: new Date(date).toLocaleDateString('en-US', {weekday: 'short'}) };
+         kids.forEach(kid => {
+             const points = choreHistory
+                .filter(log => log.date === date && log.userId === kid.id)
+                .reduce((sum, log) => sum + log.points, 0);
+             entry[kid.name] = points;
+         });
+         return entry;
+     });
+  };
+
+  const getRecentLogs = () => {
+      return [...choreHistory].sort((a,b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()).slice(0, 20);
+  };
+
   return (
     <div className="flex h-full bg-slate-100">
       {/* Sidebar */}
@@ -234,6 +261,12 @@ const ParentPortal: React.FC<ParentPortalProps> = ({
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'overview' ? 'bg-blue-600 text-white' : 'hover:bg-slate-800'}`}
           >
             <CalIcon size={20} /> Overview
+          </button>
+          <button 
+            onClick={() => setActiveTab('history')}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'history' ? 'bg-blue-600 text-white' : 'hover:bg-slate-800'}`}
+          >
+            <BarChart2 size={20} /> History & Analytics
           </button>
           <button 
             onClick={() => setActiveTab('chores')}
@@ -300,6 +333,114 @@ const ParentPortal: React.FC<ParentPortalProps> = ({
            </div>
         )}
 
+        {activeTab === 'history' && (
+            <div className="space-y-8">
+                 <div>
+                    <h2 className="text-2xl font-bold text-slate-800">Analytics & History</h2>
+                    <p className="text-slate-500">Track chore completion and points over time.</p>
+                </div>
+
+                {/* Charts Area */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    {/* Main Chart */}
+                    <div className="lg:col-span-2 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm h-96">
+                        <h3 className="font-bold text-lg text-slate-700 mb-6 flex items-center gap-2">
+                            <TrendingUp size={20}/> Points Earned (Last 7 Days)
+                        </h3>
+                        <ResponsiveContainer width="100%" height="80%">
+                            <BarChart data={getWeeklyPointsData()}>
+                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                                <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fill: '#64748b'}} dy={10} />
+                                <YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b'}} />
+                                <Tooltip cursor={{fill: '#f8fafc'}} contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}} />
+                                <Legend wrapperStyle={{paddingTop: '20px'}} />
+                                {kids.map((kid, index) => (
+                                    <Bar 
+                                        key={kid.id} 
+                                        dataKey={kid.name} 
+                                        fill={['#3b82f6', '#ec4899', '#8b5cf6', '#10b981'][index % 4]} 
+                                        radius={[4, 4, 0, 0]} 
+                                        barSize={40}
+                                    />
+                                ))}
+                            </BarChart>
+                        </ResponsiveContainer>
+                    </div>
+
+                    {/* Stats Cards */}
+                    <div className="space-y-4">
+                        <div className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl p-6 text-white shadow-lg">
+                             <h4 className="opacity-90 font-medium mb-1">Total Tasks Completed</h4>
+                             <p className="text-4xl font-black">{choreHistory.length}</p>
+                             <p className="text-xs opacity-70 mt-2">Since tracking began</p>
+                        </div>
+                        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                             <h4 className="text-slate-500 font-bold text-sm uppercase mb-4">Top Earner (All Time)</h4>
+                             {kids.length > 0 ? (() => {
+                                 const topEarner = [...kids].sort((a,b) => b.totalPointsEarned - a.totalPointsEarned)[0];
+                                 return (
+                                     <div className="flex items-center gap-4">
+                                         <img src={topEarner.avatar} className="w-12 h-12 rounded-full" />
+                                         <div>
+                                             <p className="font-bold text-xl">{topEarner.name}</p>
+                                             <p className="text-indigo-600 font-bold">{topEarner.totalPointsEarned} pts</p>
+                                         </div>
+                                     </div>
+                                 )
+                             })() : <p className="text-slate-400">No data</p>}
+                        </div>
+                    </div>
+                </div>
+
+                {/* Detailed Logs */}
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                    <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+                         <h3 className="font-bold text-lg text-slate-700 flex items-center gap-2">
+                             <History size={20}/> Recent Activity Log
+                         </h3>
+                    </div>
+                    <table className="w-full text-left">
+                        <thead className="bg-slate-50 text-slate-500 text-xs uppercase font-bold">
+                            <tr>
+                                <th className="px-6 py-4">Date & Time</th>
+                                <th className="px-6 py-4">Kid</th>
+                                <th className="px-6 py-4">Task</th>
+                                <th className="px-6 py-4 text-right">Points</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-50">
+                            {getRecentLogs().map(log => (
+                                <tr key={log.id} className="hover:bg-slate-50 transition-colors">
+                                    <td className="px-6 py-4 text-slate-600 text-sm">
+                                        {new Date(log.timestamp).toLocaleDateString()} <span className="text-slate-400 text-xs ml-1">{new Date(log.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                                    </td>
+                                    <td className="px-6 py-4">
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-6 h-6 rounded-full bg-slate-200 overflow-hidden">
+                                                <img src={users.find(u => u.id === log.userId)?.avatar} className="w-full h-full object-cover" />
+                                            </div>
+                                            <span className="font-medium text-slate-700">{log.userName}</span>
+                                        </div>
+                                    </td>
+                                    <td className="px-6 py-4 text-slate-700 font-medium">{log.choreTitle}</td>
+                                    <td className="px-6 py-4 text-right">
+                                        <span className="bg-green-100 text-green-700 px-2 py-1 rounded-md text-xs font-bold">+{log.points}</span>
+                                    </td>
+                                </tr>
+                            ))}
+                            {choreHistory.length === 0 && (
+                                <tr>
+                                    <td colSpan={4} className="px-6 py-8 text-center text-slate-400 italic">No activity recorded yet.</td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        )}
+
+        {/* ... (Existing Chores, Rewards, Settings Tabs remain unchanged) ... */}
+        
         {activeTab === 'chores' && (
           <div className="space-y-8">
              {/* Header / Add Button */}

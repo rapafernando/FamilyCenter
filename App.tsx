@@ -1,6 +1,7 @@
+
 import React, { useState, useEffect } from 'react';
-import { User, Chore, Reward, UserRole, AppState, Meal, MealType, ChoreAssignment } from './types';
-import { INITIAL_USERS, INITIAL_CHORES, INITIAL_REWARDS, INITIAL_EVENTS, INITIAL_MEALS, INITIAL_PHOTOS } from './constants';
+import { User, Chore, Reward, UserRole, AppState, Meal, MealType, ChoreAssignment, ChoreLog } from './types';
+import { INITIAL_USERS, INITIAL_CHORES, INITIAL_REWARDS, INITIAL_EVENTS, INITIAL_MEALS, INITIAL_PHOTOS, INITIAL_CHORE_LOGS } from './constants';
 import AuthScreen from './components/AuthScreen';
 import ParentPortal from './components/ParentPortal';
 import KidDashboard from './components/KidDashboard';
@@ -52,6 +53,7 @@ const App: React.FC = () => {
           users: safeUsers,
           events: Array.isArray(parsed.events) ? parsed.events : INITIAL_EVENTS,
           chores: safeChores,
+          choreHistory: Array.isArray(parsed.choreHistory) ? parsed.choreHistory : INITIAL_CHORE_LOGS,
           meals: Array.isArray(parsed.meals) ? parsed.meals : INITIAL_MEALS,
           rewards: Array.isArray(parsed.rewards) ? parsed.rewards : INITIAL_REWARDS,
           photos: Array.isArray(parsed.photos) ? parsed.photos : INITIAL_PHOTOS,
@@ -65,6 +67,7 @@ const App: React.FC = () => {
       familyName: 'My Family',
       users: INITIAL_USERS,
       chores: INITIAL_CHORES,
+      choreHistory: INITIAL_CHORE_LOGS,
       rewards: INITIAL_REWARDS,
       events: INITIAL_EVENTS,
       meals: INITIAL_MEALS,
@@ -132,8 +135,10 @@ const App: React.FC = () => {
       // If asUserId is passed (e.g. Parent clicking for Kid), use that.
       // Otherwise use currentUser (Kid clicking for themselves).
       const targetUserId = asUserId || prev.currentUser?.id;
-
       if (!targetUserId) return prev;
+
+      const targetUser = prev.users.find(u => u.id === targetUserId);
+      if (!targetUser) return prev;
 
       // Find if target user is assigned to this chore
       const assignment = chore.assignments.find(a => a.userId === targetUserId);
@@ -141,7 +146,9 @@ const App: React.FC = () => {
 
       // Check if user already completed it today
       const alreadyCompleted = chore.completedBy.includes(targetUserId);
+      const todayDate = new Date().toISOString().split('T')[0];
 
+      // Update User Points
       const updatedUsers = prev.users.map(u => {
         if (u.id === targetUserId) {
           return {
@@ -153,6 +160,7 @@ const App: React.FC = () => {
         return u;
       });
 
+      // Update Chore Completion Status
       const updatedChores = prev.chores.map(c => {
         if (c.id === choreId) {
             let newCompletedBy = [...c.completedBy];
@@ -166,6 +174,35 @@ const App: React.FC = () => {
         return c;
       });
 
+      // Update Chore History (Logs)
+      let updatedHistory = [...(prev.choreHistory || [])];
+      
+      if (!alreadyCompleted) {
+         // ADD LOG
+         const newLog: ChoreLog = {
+             id: `log-${Date.now()}`,
+             choreId: chore.id,
+             choreTitle: chore.title,
+             userId: targetUserId,
+             userName: targetUser.name,
+             points: assignment.points,
+             date: todayDate,
+             timestamp: new Date().toISOString()
+         };
+         updatedHistory.push(newLog);
+      } else {
+         // REMOVE LOG (Undo action for today)
+         // Find the most recent log for this chore/user today and remove it
+         const logIndex = updatedHistory.findIndex(l => 
+             l.choreId === choreId && 
+             l.userId === targetUserId && 
+             l.date === todayDate
+         );
+         if (logIndex > -1) {
+             updatedHistory.splice(logIndex, 1);
+         }
+      }
+
       // Update current user state as well to reflect points immediately if we are that user
       const updatedCurrentUser = prev.currentUser?.id === targetUserId 
          ? updatedUsers.find(u => u.id === targetUserId) || prev.currentUser
@@ -175,6 +212,7 @@ const App: React.FC = () => {
         ...prev,
         users: updatedUsers,
         chores: updatedChores,
+        choreHistory: updatedHistory,
         currentUser: updatedCurrentUser
       };
     });
@@ -331,6 +369,7 @@ const App: React.FC = () => {
               users={state.users}
               chores={state.chores}
               rewards={state.rewards}
+              choreHistory={state.choreHistory}
               onAddChore={handleAddChore}
               onUpdateChore={handleUpdateChore}
               onDeleteChore={handleDeleteChore}
