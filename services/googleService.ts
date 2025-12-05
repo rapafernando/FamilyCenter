@@ -35,9 +35,9 @@ export const initGoogleClient = (callback: (response: any) => void) => {
  */
 export const signInWithGoogle = (options?: { prompt?: string }) => {
   if (tokenClient) {
-    if (options?.prompt) {
-        // Request with specific prompt (e.g. to force account selection or consent)
-        tokenClient.requestAccessToken({ prompt: options.prompt });
+    // If prompt is provided, merge it into the request
+    if (options) {
+        tokenClient.requestAccessToken(options);
     } else {
         tokenClient.requestAccessToken();
     }
@@ -45,6 +45,20 @@ export const signInWithGoogle = (options?: { prompt?: string }) => {
     console.error("Google Token Client not initialized");
     alert("Google Client not ready. Please check your internet connection or Client ID.");
   }
+};
+
+/**
+ * Revokes the current access token. 
+ * This is useful for "Resetting" permissions if the user wants to change scopes or fix errors.
+ */
+export const revokeToken = (accessToken: string, callback?: () => void) => {
+    if (typeof window !== 'undefined' && window.google && accessToken) {
+        window.google.accounts.oauth2.revoke(accessToken, () => {
+            if (callback) callback();
+        });
+    } else {
+        if (callback) callback();
+    }
 };
 
 /**
@@ -98,8 +112,6 @@ export const fetchAlbums = async (accessToken: string) => {
         }
 
         const data = await response.json();
-        // The API returns 'albums' for app-created albums and readable user albums
-        // If empty, it might be that the user has no albums or permissions issues.
         return data.albums || [];
     } catch (e) {
         console.error("Error fetching albums", e);
@@ -128,7 +140,6 @@ export const fetchPhotosFromAlbum = async (accessToken: string, albumId: string)
         if (!response.ok) {
              const err = await response.json();
              console.error("Photo Fetch Error", err);
-             // Don't throw here to avoid crashing the whole dashboard view, just return empty
              return [];
         }
 

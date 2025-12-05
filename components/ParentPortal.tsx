@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { User, Chore, Reward, UserRole, TimeOfDay, ChoreFrequency, ChoreLog, CalendarSource, PhotoConfig } from '../types';
 import { Calendar as CalIcon, CheckSquare, Settings, Plus, Trash2, UserPlus, Save, Clock, Repeat, MoreVertical, Edit, Copy, BarChart2, TrendingUp, History, Gift, Users, Link, Image as ImageIcon, RefreshCw, CheckCircle2, Loader2, AlertTriangle, LogOut } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line } from 'recharts';
-import { initGoogleClient, signInWithGoogle, fetchCalendarList, fetchAlbums } from '../services/googleService';
+import { initGoogleClient, signInWithGoogle, fetchCalendarList, fetchAlbums, revokeToken } from '../services/googleService';
 
 interface ParentPortalProps {
   familyName: string;
@@ -276,19 +276,13 @@ const ParentPortal: React.FC<ParentPortalProps> = ({
   const handleGoogleLink = (forceConsent = false) => {
       initGoogleClient((response) => {
           if(response && response.access_token) {
-              // --- SCOPE VALIDATION ---
-              const grantedScopes = response.scope || '';
-              const requiredPhotoScope = 'photoslibrary.readonly';
-              
-              if (!grantedScopes.includes(requiredPhotoScope)) {
-                  alert("⚠️ Missing Photos Permission\n\nPlease verify that you checked the 'Google Photos' box in the consent screen. Without this permission, we cannot access your albums.");
-                  // We still set the token because Calendar might work, but we warn the user.
-              }
-
               onSetGoogleToken(response.access_token);
-              // Clear errors
+              // Clear errors immediately on new token
               setCalError(null);
               setPhotoError(null);
+              setFetchedCalendars([]); // clear old data
+              setFetchedAlbums([]);
+              
               // Fetch Lists immediately
               fetchCalendarList(response.access_token).then(setFetchedCalendars).catch(e => setCalError(e.message));
               fetchAlbums(response.access_token).then(setFetchedAlbums).catch(e => setPhotoError(e.message));
@@ -296,6 +290,17 @@ const ParentPortal: React.FC<ParentPortalProps> = ({
       });
       // If forceConsent is true, we force the prompt to ensure we get a fresh token with all scopes
       signInWithGoogle(forceConsent ? { prompt: 'consent' } : undefined);
+  };
+
+  const handleResetPermissions = () => {
+      if (googleAccessToken) {
+          revokeToken(googleAccessToken, () => {
+              // After revoking, we force a new link with consent
+              handleGoogleLink(true);
+          });
+      } else {
+          handleGoogleLink(true);
+      }
   };
 
   const handleRefreshCalendars = async () => {
@@ -655,10 +660,10 @@ const ParentPortal: React.FC<ParentPortalProps> = ({
                                 <div className="flex gap-2">
                                     {calError && (
                                         <button 
-                                            onClick={() => handleGoogleLink(true)} 
+                                            onClick={handleResetPermissions} 
                                             className="text-orange-500 hover:text-orange-600 bg-orange-50 px-3 py-1.5 rounded-lg text-xs font-bold"
                                         >
-                                            Re-Connect
+                                            Reset Permissions
                                         </button>
                                     )}
                                     <button 
@@ -761,10 +766,10 @@ const ParentPortal: React.FC<ParentPortalProps> = ({
                                 <div className="flex gap-2">
                                     {photoError && (
                                         <button 
-                                            onClick={() => handleGoogleLink(true)} 
+                                            onClick={handleResetPermissions} 
                                             className="text-orange-500 hover:text-orange-600 bg-orange-50 px-3 py-1.5 rounded-lg text-xs font-bold"
                                         >
-                                            Re-Connect
+                                            Reset Permissions
                                         </button>
                                     )}
                                     <button 
@@ -784,6 +789,9 @@ const ParentPortal: React.FC<ParentPortalProps> = ({
                                      <div>
                                         <p className="font-bold">Error loading albums</p>
                                         <p className="text-xs opacity-80">{photoError}</p>
+                                        <p className="text-[10px] text-slate-500 mt-1">
+                                            If this says "insufficient scopes", click <strong>Reset Permissions</strong> and ensure you check the "Google Photos" box in the popup.
+                                        </p>
                                      </div>
                                  </div>
                              )}
