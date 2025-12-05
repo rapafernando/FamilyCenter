@@ -124,7 +124,7 @@ pm2 save
 
 Your app is now running at `http://YOUR_SERVER_IP:3000`.
 
-### 7. (Optional) Setup Nginx Reverse Proxy
+### 7. Setup Nginx Reverse Proxy
 
 To access the app via port 80 (standard HTTP) instead of 3000.
 
@@ -161,6 +161,36 @@ sudo rm /etc/nginx/sites-enabled/default
 sudo nginx -t
 sudo systemctl restart nginx
 ```
+
+### 8. Setup SSL (HTTPS)
+
+Secure your domain with a free Let's Encrypt certificate.
+
+1.  **Install Certbot**:
+    ```bash
+    sudo apt install certbot python3-certbot-nginx
+    ```
+
+2.  **Allow HTTPS through Firewall**:
+    ```bash
+    sudo ufw allow 'Nginx Full'
+    ```
+
+3.  **Generate Certificate**:
+    Replace `YOUR_DOMAIN` with your actual domain name (e.g., family-dashboard.com).
+    ```bash
+    sudo certbot --nginx -d YOUR_DOMAIN
+    ```
+    Follow the prompts (enter email, agree to terms). Certbot will automatically update your Nginx configuration.
+
+4.  **Update Google Cloud Console**:
+    Since your URL changed from `http` to `https`, Google Sign-In will stop working until you update it.
+    1.  Go to [Google Cloud Console](https://console.cloud.google.com/).
+    2.  Navigate to **APIs & Services > Credentials**.
+    3.  Edit your OAuth 2.0 Client ID.
+    4.  Under **Authorized JavaScript origins**, add `https://YOUR_DOMAIN`.
+    5.  Under **Authorized redirect URIs**, add `https://YOUR_DOMAIN`.
+    6.  Click **Save**.
 
 ## License
 
