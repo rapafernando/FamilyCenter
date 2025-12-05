@@ -13,30 +13,31 @@ type ViewState = 'WALL' | 'AUTH' | 'USER_SESSION';
 const STORAGE_KEY = 'familySyncData';
 
 const App: React.FC = () => {
-  const [view, setView] = useState<ViewState>('WALL');
-  
   // Initialize state from LocalStorage or default constants
   const [state, setState] = useState<AppState>(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      try {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
         const parsed = JSON.parse(saved);
-        // Ensure we merge with defaults to avoid missing keys from old versions
+        // Ensure we always have at least one user if the saved array is empty (edge case fix)
+        const safeUsers = (parsed.users && parsed.users.length > 0) ? parsed.users : INITIAL_USERS;
+        
         return {
           familyName: 'My Family',
-          users: [],
-          chores: [],
-          rewards: [],
-          events: [],
-          meals: [],
-          photos: [],
-          ...parsed,
-          currentUser: null // Always reset current user on reload
+          currentUser: null,
+          ...parsed, // Override defaults with saved data
+          users: safeUsers,
+          events: parsed.events || INITIAL_EVENTS,
+          chores: parsed.chores || INITIAL_CHORES,
+          meals: parsed.meals || INITIAL_MEALS,
+          rewards: parsed.rewards || INITIAL_REWARDS,
+          photos: parsed.photos || INITIAL_PHOTOS,
         };
-      } catch (e) {
-        console.error("Failed to parse saved state", e);
       }
+    } catch (e) {
+      console.error("Failed to parse saved state", e);
     }
+    // Default fallback
     return {
       familyName: 'My Family',
       users: INITIAL_USERS,
@@ -49,20 +50,32 @@ const App: React.FC = () => {
     };
   });
 
-  // Save to LocalStorage whenever state changes (excluding currentUser)
+  // Determine initial view based on whether we have a logged-in user
+  const [view, setView] = useState<ViewState>(() => {
+    return state.currentUser ? 'WALL' : 'AUTH';
+  });
+
+  // Save to LocalStorage whenever state changes
   useEffect(() => {
-    const { currentUser, ...persistentState } = state;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(persistentState));
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } catch (e) {
+      console.error("Failed to save state", e);
+    }
   }, [state]);
 
   const handleLogin = (user: User) => {
     setState(prev => ({ ...prev, currentUser: user }));
-    setView('USER_SESSION');
+    setView('WALL'); 
   };
 
   const handleLogout = () => {
     setState(prev => ({ ...prev, currentUser: null }));
-    setView('WALL');
+    setView('AUTH');
+  };
+
+  const handleSessionOpen = () => {
+    setView('USER_SESSION');
   };
 
   // Google Sync Logic
@@ -73,7 +86,6 @@ const App: React.FC = () => {
       setState(prev => ({
         ...prev,
         events: [...(prev.events || []), ...googleEvents],
-        // If the current user is a parent, try to update their avatar/name if it's generic
         users: prev.users.map(u => 
           u.id === prev.currentUser?.id && u.role === UserRole.PARENT
             ? { ...u, name: googleProfile.given_name || u.name, avatar: googleProfile.picture || u.avatar } 
@@ -176,7 +188,6 @@ const App: React.FC = () => {
     });
   };
 
-  // Settings Actions
   const handleUpdateFamilyName = (name: string) => {
     setState(prev => ({ ...prev, familyName: name }));
   };
@@ -201,35 +212,41 @@ const App: React.FC = () => {
     setState(prev => ({
       ...prev,
       users: prev.users.filter(u => u.id !== id),
-      chores: prev.chores.filter(c => c.assignedTo !== id) // Cleanup assigned chores
+      chores: prev.chores.filter(c => c.assignedTo !== id)
     }));
   };
 
   // --- Render ---
-
-  if (view === 'WALL') {
-    return (
-      <FamilyWallDashboard 
-        familyName={state.familyName}
-        users={state.users}
-        events={state.events}
-        chores={state.chores}
-        meals={state.meals}
-        photos={state.photos}
-        onSettingsClick={() => setView('AUTH')}
-        onToggleChore={handleToggleChore}
-        onUpdateMeal={handleUpdateMeal}
-      />
-    );
-  }
 
   if (view === 'AUTH') {
     return (
       <AuthScreen 
         users={state.users} 
         onLogin={handleLogin}
-        onGoogleSuccess={handleGoogleSync}
-        onCancel={() => setView('WALL')}
+        onGoogleSuccess={(profile) => {
+           handleGoogleSync(profile);
+           const parent = state.users.find(u => u.role === UserRole.PARENT);
+           if(parent) handleLogin(parent);
+        }}
+        onCancel={() => {}} 
+      />
+    );
+  }
+
+  if (view === 'WALL') {
+    return (
+      <FamilyWallDashboard 
+        familyName={state.familyName}
+        users={state.users}
+        events={state.events || []}
+        chores={state.chores || []}
+        meals={state.meals || []}
+        photos={state.photos || []}
+        onSettingsClick={handleSessionOpen}
+        onToggleChore={handleToggleChore}
+        onUpdateMeal={handleUpdateMeal}
+        currentUser={state.currentUser}
+        onLogout={handleLogout}
       />
     );
   }
@@ -238,9 +255,9 @@ const App: React.FC = () => {
     return (
       <div className="h-screen w-full relative">
          <button 
-          onClick={handleLogout}
+          onClick={() => setView('WALL')}
           className="fixed top-4 right-4 z-50 bg-white/80 p-2 rounded-full shadow-sm hover:bg-slate-200 backdrop-blur-sm border border-slate-200"
-          title="Exit to Dashboard"
+          title="Back to Wall"
          >
            <LogOut size={20} className="text-slate-600" />
          </button>

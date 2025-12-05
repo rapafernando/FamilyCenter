@@ -1,10 +1,16 @@
 import { GoogleGenAI, Type } from "@google/genai";
 
-// Note: In a real environment, this should be accessed safely.
-// For this demo, we assume the environment variable is available.
-const API_KEY = process.env.API_KEY || '';
+// Access API key safely. 
+// We use a try-catch block to handle cases where `process` is not defined in the browser,
+// preventing a ReferenceError if the build replacement doesn't happen.
+let apiKey = '';
+try {
+  apiKey = process.env.API_KEY || '';
+} catch (e) {
+  console.warn("process.env.API_KEY access failed, running without API key.");
+}
 
-const ai = new GoogleGenAI({ apiKey: API_KEY });
+const ai = new GoogleGenAI({ apiKey });
 
 export interface AIChoreSuggestion {
   title: string;
@@ -13,7 +19,7 @@ export interface AIChoreSuggestion {
 }
 
 export const suggestChores = async (context: string): Promise<AIChoreSuggestion[]> => {
-  if (!API_KEY) {
+  if (!apiKey) {
     console.warn("Gemini API Key missing. Returning mock suggestions.");
     return [
       { title: "Organize Bookshelf", points: 150, description: "Sort books by size or color." },

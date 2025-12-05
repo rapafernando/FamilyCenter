@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { User, CalendarEvent, Chore, Meal, MealType, Photo } from '../types';
 import { 
   Calendar, CheckSquare, Settings, Coffee, Utensils, 
-  Image as ImageIcon, List, Moon, ChevronLeft, ChevronRight,
-  CloudSun, Clock, Play, Pause, RefreshCw, X
+  Image as ImageIcon, Moon, ChevronLeft, ChevronRight,
+  CloudSun, Clock, Play, Pause, RefreshCw, X, LogOut
 } from 'lucide-react';
 
 interface FamilyWallDashboardProps {
@@ -16,13 +16,21 @@ interface FamilyWallDashboardProps {
   onSettingsClick: () => void;
   onToggleChore: (id: string) => void;
   onUpdateMeal: (date: string, type: MealType, title: string) => void;
+  currentUser: User | null;
+  onLogout: () => void;
 }
 
+type CalendarViewMode = 'day' | 'week' | 'month';
+
 const FamilyWallDashboard: React.FC<FamilyWallDashboardProps> = ({ 
-  familyName, users, events, chores, meals, photos, onSettingsClick, onToggleChore, onUpdateMeal
+  familyName, users, events, chores, meals, photos, onSettingsClick, onToggleChore, onUpdateMeal, currentUser, onLogout
 }) => {
   const [activeTab, setActiveTab] = useState<'calendar' | 'tasks' | 'meals' | 'photos'>('calendar');
   const [currentTime, setCurrentTime] = useState(new Date());
+  
+  // Calendar State
+  const [calendarMode, setCalendarMode] = useState<CalendarViewMode>('week');
+  const [calendarDate, setCalendarDate] = useState(new Date());
 
   // Photo Frame State
   const [currentPhotoIdx, setCurrentPhotoIdx] = useState(0);
@@ -47,17 +55,89 @@ const FamilyWallDashboard: React.FC<FamilyWallDashboardProps> = ({
     return () => clearInterval(interval);
   }, [activeTab, isPlaying, isSynced, photos.length]);
 
-  const weekDates = Array.from({ length: 5 }).map((_, i) => {
-    const d = new Date();
+  // Calendar Logic
+  const getWeekStart = (date: Date) => {
+    const d = new Date(date);
+    const day = d.getDay();
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Adjust when day is sunday to start on Monday
+    return new Date(d.setDate(diff));
+  };
+
+  const getMonthDays = (date: Date) => {
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    
+    // Get padding days from previous month to start grid on Monday
+    const startPadding = (firstDay.getDay() + 6) % 7; 
+    const days: Date[] = [];
+
+    // Previous month days
+    for (let i = startPadding; i > 0; i--) {
+        days.push(new Date(year, month, 1 - i));
+    }
+    // Current month days
+    for (let i = 1; i <= lastDay.getDate(); i++) {
+        days.push(new Date(year, month, i));
+    }
+    // Next month days to fill grid (42 cells total usually covers all)
+    const remaining = 42 - days.length;
+    for (let i = 1; i <= remaining; i++) {
+        days.push(new Date(year, month + 1, i));
+    }
+    return days;
+  };
+
+  const getCalendarDates = () => {
+    if (calendarMode === 'day') return [new Date(calendarDate)];
+    if (calendarMode === 'week') {
+      const start = getWeekStart(calendarDate);
+      return Array.from({ length: 7 }).map((_, i) => {
+        const d = new Date(start);
+        d.setDate(start.getDate() + i);
+        return d;
+      });
+    }
+    if (calendarMode === 'month') {
+        return getMonthDays(calendarDate);
+    }
+    return [];
+  };
+
+  const currentDates = getCalendarDates();
+  
+  // Use weekDates for Meal Planner specifically (always next 7 days from today, or current week)
+  const mealDates = Array.from({ length: 7 }).map((_, i) => {
+    const d = getWeekStart(new Date()); 
     d.setDate(d.getDate() + i);
     return d;
   });
+
+  const handlePrev = () => {
+    const d = new Date(calendarDate);
+    if (calendarMode === 'day') d.setDate(d.getDate() - 1);
+    else if (calendarMode === 'week') d.setDate(d.getDate() - 7);
+    else if (calendarMode === 'month') d.setMonth(d.getMonth() - 1);
+    setCalendarDate(d);
+  };
+
+  const handleNext = () => {
+    const d = new Date(calendarDate);
+    if (calendarMode === 'day') d.setDate(d.getDate() + 1);
+    else if (calendarMode === 'week') d.setDate(d.getDate() + 7);
+    else if (calendarMode === 'month') d.setMonth(d.getMonth() + 1);
+    setCalendarDate(d);
+  };
+
+  const handleToday = () => setCalendarDate(new Date());
 
   const getEventsForDate = (date: Date) => {
     return events.filter(e => {
       const eventDate = new Date(e.start);
       return eventDate.getDate() === date.getDate() && 
-             eventDate.getMonth() === date.getMonth();
+             eventDate.getMonth() === date.getMonth() &&
+             eventDate.getFullYear() === date.getFullYear();
     });
   };
 
@@ -89,7 +169,7 @@ const FamilyWallDashboard: React.FC<FamilyWallDashboardProps> = ({
       {/* Sidebar */}
       <div className="w-24 bg-white border-r border-slate-200 flex flex-col items-center py-6 gap-8 z-10 shadow-[4px_0_24px_rgba(0,0,0,0.02)]">
         <div className="mb-2">
-           <div className="w-12 h-12 bg-slate-900 rounded-xl flex items-center justify-center text-white font-bold text-xl">
+           <div className="w-12 h-12 bg-slate-900 rounded-xl flex items-center justify-center text-white font-bold text-xl shadow-lg shadow-blue-900/20">
              {familyName.charAt(0)}
            </div>
         </div>
@@ -99,17 +179,30 @@ const FamilyWallDashboard: React.FC<FamilyWallDashboardProps> = ({
           <NavButton icon={<CheckSquare size={24} />} label="Tasks" active={activeTab === 'tasks'} onClick={() => setActiveTab('tasks')} />
           <NavButton icon={<Utensils size={24} />} label="Meals" active={activeTab === 'meals'} onClick={() => setActiveTab('meals')} />
           <NavButton icon={<ImageIcon size={24} />} label="Photos" active={activeTab === 'photos'} onClick={() => setActiveTab('photos')} />
-          <NavButton icon={<List size={24} />} label="Lists" />
-          <NavButton icon={<Moon size={24} />} label="Sleep" />
         </nav>
 
-        <button 
-          onClick={onSettingsClick}
-          className="flex flex-col items-center gap-1 text-slate-400 hover:text-slate-600 transition-colors mt-auto"
-        >
-          <Settings size={24} />
-          <span className="text-[10px] font-medium uppercase tracking-wider">Settings</span>
-        </button>
+        <div className="flex flex-col gap-4 mt-auto">
+            {currentUser && (
+                 <button 
+                  onClick={onLogout}
+                  className="flex flex-col items-center gap-1 text-slate-400 hover:text-red-500 transition-colors"
+                  title="Sign Out"
+                >
+                  <LogOut size={24} />
+                </button>
+            )}
+            <button 
+            onClick={onSettingsClick}
+            className="flex flex-col items-center gap-1 text-slate-400 hover:text-slate-600 transition-colors"
+            >
+            {currentUser ? (
+                <img src={currentUser.avatar} className="w-8 h-8 rounded-full border-2 border-slate-200" alt="Me"/>
+            ) : (
+                <Settings size={24} />
+            )}
+            <span className="text-[10px] font-medium uppercase tracking-wider">{currentUser ? 'My Profile' : 'Login'}</span>
+            </button>
+        </div>
       </div>
 
       {/* Main Content */}
@@ -117,70 +210,152 @@ const FamilyWallDashboard: React.FC<FamilyWallDashboardProps> = ({
         
         {/* Universal Header (Hidden on Photos mode) */}
         {activeTab !== 'photos' && (
-          <header className="px-8 py-5 flex items-center justify-between bg-white border-b border-slate-100">
+          <header className="px-6 py-4 flex items-center justify-between bg-white border-b border-slate-100 h-20">
             <div className="flex items-center gap-6">
-              <h1 className="text-2xl font-serif text-slate-800 tracking-tight">{familyName}</h1>
-              <div className="text-slate-400 text-lg font-light flex items-center gap-2">
+              <h1 className="text-2xl font-serif text-slate-800 tracking-tight hidden md:block">{familyName}</h1>
+              <div className="text-slate-400 text-lg font-light flex items-center gap-2 bg-slate-50 px-3 py-1 rounded-full">
                  <Clock size={18} />
-                 {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                 {currentTime.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
               </div>
             </div>
+            
+            {/* Calendar Controls (Only show in Calendar tab) */}
+            {activeTab === 'calendar' && (
+               <div className="flex bg-slate-100 p-1 rounded-lg">
+                  {(['day', 'week', 'month'] as const).map(mode => (
+                      <button
+                        key={mode}
+                        onClick={() => setCalendarMode(mode)}
+                        className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all capitalize ${
+                            calendarMode === mode ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                        }`}
+                      >
+                          {mode}
+                      </button>
+                  ))}
+               </div>
+            )}
             
             <div className="flex items-center gap-4">
                <div className="flex items-center gap-2 text-slate-600 bg-slate-100 px-3 py-1.5 rounded-full text-sm">
                   <CloudSun size={18} className="text-orange-400"/>
-                  <span>72° Sunny</span>
+                  <span className="hidden md:inline">72° Sunny</span>
                </div>
                
-               <div className="flex -space-x-2">
-                  {users.map(u => (
-                    <img key={u.id} src={u.avatar} alt={u.name} className="w-8 h-8 rounded-full border-2 border-white" />
-                  ))}
-               </div>
-
-               <div className="flex gap-2 ml-4">
-                  <button className="p-2 hover:bg-slate-100 rounded-full text-slate-500"><ChevronLeft size={20} /></button>
-                  <button className="px-3 py-1 bg-slate-900 text-white rounded-full text-sm font-medium">Today</button>
-                  <button className="p-2 hover:bg-slate-100 rounded-full text-slate-500"><ChevronRight size={20} /></button>
-               </div>
+               {activeTab === 'calendar' && (
+                   <button 
+                     onClick={handleToday}
+                     className="px-3 py-1.5 bg-slate-900 text-white rounded-full text-sm font-medium hover:bg-slate-800 transition-colors"
+                   >
+                     Today
+                   </button>
+               )}
             </div>
           </header>
         )}
 
         {/* Calendar View */}
         {activeTab === 'calendar' && (
-          <div className="flex-1 overflow-x-auto overflow-y-hidden p-6">
-            <div className="h-full grid grid-cols-5 gap-4 min-w-[800px]">
-              {weekDates.map((date, idx) => {
-                const isToday = date.getDate() === new Date().getDate();
-                const dayEvents = getEventsForDate(date);
-                
-                return (
-                  <div key={idx} className={`flex flex-col h-full rounded-2xl border ${isToday ? 'bg-white border-blue-200 shadow-sm ring-1 ring-blue-100' : 'bg-white border-slate-100'}`}>
-                    <div className="p-4 border-b border-slate-50">
-                      <p className={`text-2xl font-serif mb-1 ${isToday ? 'text-blue-600' : 'text-slate-700'}`}>{getDayName(date)} <span className="font-sans font-bold">{getDateNum(date)}</span></p>
-                      {isToday && <span className="text-xs font-bold bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full uppercase tracking-wide">Today</span>}
-                    </div>
-                    <div className="p-3 space-y-3 flex-1 overflow-y-auto">
-                      {dayEvents.length === 0 && (
-                        <div className="h-full flex items-center justify-center text-slate-300 italic text-sm">
-                          No events
+          <div className="flex-1 flex flex-col overflow-hidden p-4 relative">
+             <div className="flex items-center justify-between mb-4 px-2">
+                 <h2 className="text-2xl font-serif text-slate-700">
+                    {calendarDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                 </h2>
+             </div>
+             
+             <div className="flex-1 flex items-stretch gap-2">
+                 {/* Left Arrow */}
+                 <button 
+                    onClick={handlePrev}
+                    className="w-12 flex items-center justify-center text-slate-400 hover:text-slate-800 hover:bg-slate-200/50 rounded-2xl transition-colors"
+                 >
+                    <ChevronLeft size={32} />
+                 </button>
+
+                 {/* Calendar Grid Container */}
+                 <div className="flex-1 bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
+                    {/* Header Row for Days */}
+                    {(calendarMode === 'week' || calendarMode === 'month') && (
+                        <div className={`grid grid-cols-7 border-b border-slate-100 bg-slate-50/50`}>
+                            {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(d => (
+                                <div key={d} className="py-3 text-center text-xs font-bold uppercase tracking-wider text-slate-400">
+                                    {d}
+                                </div>
+                            ))}
                         </div>
-                      )}
-                      
-                      {dayEvents.map(event => (
-                        <div key={event.id} className={`p-3 rounded-xl border-l-4 shadow-sm text-sm ${event.color}`}>
-                          <p className="font-bold truncate">{event.title}</p>
-                          <p className="opacity-80 text-xs mt-1">
-                            {new Date(event.start).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
-                          </p>
-                        </div>
-                      ))}
+                    )}
+
+                    <div className={`flex-1 overflow-y-auto ${calendarMode === 'day' ? 'p-0' : 'grid grid-cols-7 auto-rows-fr'}`}>
+                        {currentDates.map((date, idx) => {
+                            const isToday = date.getDate() === new Date().getDate() && date.getMonth() === new Date().getMonth() && date.getFullYear() === new Date().getFullYear();
+                            const isCurrentMonth = date.getMonth() === calendarDate.getMonth();
+                            const dayEvents = getEventsForDate(date);
+                            
+                            // Day View Render
+                            if (calendarMode === 'day') {
+                                return (
+                                    <div key={idx} className="h-full p-8 flex gap-8">
+                                         <div className="w-48 text-center pt-4">
+                                             <div className="text-6xl font-black text-slate-800">{getDateNum(date)}</div>
+                                             <div className="text-xl text-slate-500 uppercase tracking-widest">{getDayName(date)}</div>
+                                             {isToday && <div className="mt-2 inline-block bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-sm font-bold">TODAY</div>}
+                                         </div>
+                                         <div className="flex-1 border-l-2 border-slate-100 pl-8 space-y-4">
+                                             {dayEvents.length === 0 && <p className="text-slate-400 italic text-xl">No events scheduled.</p>}
+                                             {dayEvents.map(ev => (
+                                                 <div key={ev.id} className="bg-blue-50 p-6 rounded-2xl border-l-8 border-blue-500">
+                                                     <h4 className="text-2xl font-bold text-slate-800">{ev.title}</h4>
+                                                     <p className="text-blue-600 text-lg mt-1">
+                                                        {new Date(ev.start).toLocaleTimeString([], {hour: 'numeric', minute:'2-digit'})} - 
+                                                        {new Date(ev.end).toLocaleTimeString([], {hour: 'numeric', minute:'2-digit'})}
+                                                     </p>
+                                                 </div>
+                                             ))}
+                                         </div>
+                                    </div>
+                                );
+                            }
+
+                            // Week/Month Grid Render
+                            return (
+                                <div 
+                                    key={idx} 
+                                    className={`
+                                        min-h-[100px] border-r border-b border-slate-100 p-2 flex flex-col gap-1 transition-colors
+                                        ${!isCurrentMonth && calendarMode === 'month' ? 'bg-slate-50/50 text-slate-300' : 'bg-white'}
+                                        ${isToday ? 'ring-inset ring-2 ring-blue-200 bg-blue-50/30' : ''}
+                                    `}
+                                >
+                                    <div className="flex justify-between items-start">
+                                        <span className={`text-sm font-medium w-7 h-7 flex items-center justify-center rounded-full ${isToday ? 'bg-blue-600 text-white' : (isCurrentMonth ? 'text-slate-700' : 'text-slate-300')}`}>
+                                            {getDateNum(date)}
+                                        </span>
+                                    </div>
+                                    
+                                    <div className="flex-1 flex flex-col gap-1 overflow-hidden">
+                                        {dayEvents.slice(0, 4).map(event => (
+                                            <div key={event.id} className="text-xs truncate px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 border-l-2 border-blue-500">
+                                                {event.title}
+                                            </div>
+                                        ))}
+                                        {dayEvents.length > 4 && (
+                                            <span className="text-[10px] text-slate-400 pl-1">+{dayEvents.length - 4} more</span>
+                                        )}
+                                    </div>
+                                </div>
+                            );
+                        })}
                     </div>
-                  </div>
-                );
-              })}
-            </div>
+                 </div>
+
+                 {/* Right Arrow */}
+                 <button 
+                    onClick={handleNext}
+                    className="w-12 flex items-center justify-center text-slate-400 hover:text-slate-800 hover:bg-slate-200/50 rounded-2xl transition-colors"
+                 >
+                    <ChevronRight size={32} />
+                 </button>
+             </div>
           </div>
         )}
 
@@ -233,13 +408,13 @@ const FamilyWallDashboard: React.FC<FamilyWallDashboardProps> = ({
         {activeTab === 'meals' && (
            <div className="flex-1 overflow-x-auto overflow-y-auto p-6">
               <h2 className="text-3xl font-serif text-slate-800 mb-6">Weekly Menu</h2>
-              <div className="min-w-[1000px] grid grid-cols-6 gap-0 border border-slate-200 rounded-2xl overflow-hidden bg-white shadow-sm">
+              <div className="min-w-[1000px] grid grid-cols-8 gap-0 border border-slate-200 rounded-2xl overflow-hidden bg-white shadow-sm">
                  
                  {/* Header Row */}
                  <div className="p-4 bg-slate-50 border-b border-r border-slate-200 font-bold text-slate-500 uppercase tracking-wider text-sm flex items-center justify-center">
                     Meal Type
                  </div>
-                 {weekDates.map((date, idx) => (
+                 {mealDates.map((date, idx) => (
                     <div key={idx} className="p-4 bg-slate-50 border-b border-slate-200 font-bold text-slate-700 text-center">
                        {getDayName(date)} <br/>
                        <span className="text-slate-400 font-normal">{getDateNum(date)}</span>
@@ -250,7 +425,7 @@ const FamilyWallDashboard: React.FC<FamilyWallDashboardProps> = ({
                  <div className="p-4 bg-orange-50/50 border-r border-b border-slate-100 font-bold text-orange-800 flex items-center gap-2">
                     <Coffee size={18} /> Breakfast
                  </div>
-                 {weekDates.map((date, idx) => (
+                 {mealDates.map((date, idx) => (
                     <div 
                       key={`b-${idx}`} 
                       onClick={() => handleMealEdit(date, 'breakfast', getMeal(date, 'breakfast'))}
@@ -264,7 +439,7 @@ const FamilyWallDashboard: React.FC<FamilyWallDashboardProps> = ({
                  <div className="p-4 bg-green-50/50 border-r border-b border-slate-100 font-bold text-green-800 flex items-center gap-2">
                     <Utensils size={18} /> Lunch
                  </div>
-                 {weekDates.map((date, idx) => (
+                 {mealDates.map((date, idx) => (
                     <div 
                       key={`l-${idx}`} 
                       onClick={() => handleMealEdit(date, 'lunch', getMeal(date, 'lunch'))}
@@ -278,7 +453,7 @@ const FamilyWallDashboard: React.FC<FamilyWallDashboardProps> = ({
                  <div className="p-4 bg-indigo-50/50 border-r border-slate-100 font-bold text-indigo-800 flex items-center gap-2">
                     <Moon size={18} /> Dinner
                  </div>
-                 {weekDates.map((date, idx) => (
+                 {mealDates.map((date, idx) => (
                     <div 
                       key={`d-${idx}`} 
                       onClick={() => handleMealEdit(date, 'dinner', getMeal(date, 'dinner'))}
@@ -288,7 +463,6 @@ const FamilyWallDashboard: React.FC<FamilyWallDashboardProps> = ({
                     </div>
                  ))}
               </div>
-              <p className="mt-4 text-slate-400 text-sm text-center">Tap any meal slot to edit the menu.</p>
            </div>
         )}
 
@@ -363,12 +537,6 @@ const FamilyWallDashboard: React.FC<FamilyWallDashboardProps> = ({
                           onClick={handleSyncPhotos}
                           className="w-full flex items-center justify-center gap-3 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-medium py-3 px-4 rounded-xl transition-all"
                        >
-                         <svg className="w-5 h-5" viewBox="0 0 24 24">
-                           <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-                           <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-                           <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
-                           <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
-                         </svg>
                          Link Google Account
                        </button>
                     </div>
@@ -384,10 +552,10 @@ const FamilyWallDashboard: React.FC<FamilyWallDashboardProps> = ({
 const NavButton: React.FC<{ icon: React.ReactNode, label: string, active?: boolean, onClick?: () => void }> = ({ icon, label, active, onClick }) => (
   <button 
     onClick={onClick}
-    className={`flex flex-col items-center gap-1 w-full py-3 rounded-xl transition-all ${active ? 'bg-blue-50 text-blue-600' : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'}`}
+    className={`flex flex-col items-center gap-1 w-full py-3 rounded-xl transition-all ${active ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-slate-400 hover:text-slate-800 hover:bg-slate-50'}`}
   >
     {icon}
-    <span className="text-[10px] font-medium uppercase tracking-wider">{label}</span>
+    <span className={`text-[10px] font-bold uppercase tracking-wider ${active ? 'text-blue-700' : 'text-slate-400'}`}>{label}</span>
   </button>
 );
 
