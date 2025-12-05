@@ -1,7 +1,7 @@
+
 import React, { useState } from 'react';
 import { User, Chore, Reward, UserRole, TimeOfDay, ChoreFrequency } from '../types';
-import { Calendar as CalIcon, CheckSquare, Settings, Sparkles, Plus, Loader2, Trash2, UserPlus, Save, Clock, Repeat, MoreVertical, Edit, Copy } from 'lucide-react';
-import { generateChoreIcon } from '../services/geminiService';
+import { Calendar as CalIcon, CheckSquare, Settings, Plus, Trash2, UserPlus, Save, Clock, Repeat, MoreVertical, Edit, Copy } from 'lucide-react';
 
 interface ParentPortalProps {
   familyName: string;
@@ -16,6 +16,20 @@ interface ParentPortalProps {
   onAddUser: (name: string, role: UserRole) => void;
   onDeleteUser: (id: string) => void;
 }
+
+// Preset Icons (SVG Strings)
+const CHORE_ICONS = [
+  { name: 'Sparkles', svg: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>' },
+  { name: 'Trash', svg: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>' },
+  { name: 'Bed', svg: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4v16"/><path d="M2 8h18a2 2 0 0 1 2 2v10"/><path d="M2 17h20"/><path d="M6 8v9"/></svg>' },
+  { name: 'Dishes', svg: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2v0a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3"/><path d="M21 15v6"/></svg>' },
+  { name: 'Laundry', svg: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.38 3.4a2 2 0 0 0-2-1.8H5.62a2 2 0 0 0-2 1.8L2 19.8c-.1.7.5 1.2 1.2 1.2h17.6c.7 0 1.3-.5 1.2-1.2z"/><path d="M12 7v5"/><path d="M9 15h6"/></svg>' },
+  { name: 'Toys', svg: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>' },
+  { name: 'Study', svg: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>' },
+  { name: 'Pet', svg: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.49-1.28 3.6-1.28 5.14 0 .34.66-.41 1.48-1.5 2.44-3.36 2.05-6.3 3.8-6.64 4.05-.14.1-.28.1-.4.07a1 1 0 0 1-.36-.07c-.34-.25-3.28-2-6.64-4.05-1.09-.96-1.84-1.78-1.5-2.44 1.54-1.28 3.65-1.28 5.14 0 1.54 1.28 2.5 3 2.5 3s.96-1.72 2.5-3z"/></svg>' },
+  { name: 'Garden', svg: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v2a6 6 0 0 1-6 6h12a6 6 0 0 0-6-6V2"/><path d="M10 10v4"/><path d="M4 22h12"/></svg>' },
+  { name: 'Car', svg: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"/><circle cx="7" cy="17" r="2"/><path d="M9 17h6"/><circle cx="17" cy="17" r="2"/></svg>' }
+];
 
 const ParentPortal: React.FC<ParentPortalProps> = ({ 
   familyName, users, chores, rewards, 
@@ -40,7 +54,7 @@ const ParentPortal: React.FC<ParentPortalProps> = ({
   const [frequency, setFrequency] = useState<ChoreFrequency>('daily');
   const [freqConfig, setFreqConfig] = useState('all'); // all, weekdays, monday, 1, etc.
   const [timeOfDay, setTimeOfDay] = useState<TimeOfDay>('all_day');
-  const [isGeneratingIcon, setIsGeneratingIcon] = useState(false);
+  const [selectedIcon, setSelectedIcon] = useState<string>(CHORE_ICONS[0].svg);
   const [activeMenuChoreId, setActiveMenuChoreId] = useState<string | null>(null);
 
   const kids = users.filter(u => u.role === UserRole.KID);
@@ -81,6 +95,7 @@ const ParentPortal: React.FC<ParentPortalProps> = ({
       setFreqConfig('all');
       setTimeOfDay('all_day');
       setEditingChoreId(null);
+      setSelectedIcon(CHORE_ICONS[0].svg);
       setIsCreatingChore(false);
   };
 
@@ -91,6 +106,7 @@ const ParentPortal: React.FC<ParentPortalProps> = ({
       setFrequency(chore.frequency);
       setFreqConfig(chore.frequencyConfig);
       setTimeOfDay(chore.timeOfDay);
+      setSelectedIcon(chore.icon);
       
       const kidsSet = new Set<string>();
       const pointsMap: Record<string, number> = {};
@@ -116,33 +132,10 @@ const ParentPortal: React.FC<ParentPortalProps> = ({
       setActiveMenuChoreId(null);
   };
 
-  const handleSaveChore = async () => {
+  const handleSaveChore = () => {
       if (!choreTitle.trim() || selectedKids.size === 0) {
           alert("Please enter a title and select at least one kid.");
           return;
-      }
-
-      let iconSvg = '';
-      
-      // Only generate new icon if title changed or it's a new chore without a pre-existing icon
-      // For editing, we check if title is different from existing, or if we force regeneration
-      // For simplicity here, we always regenerate on new, and regenerate on edit if we want, 
-      // but let's assume we keep old icon if editing unless we want to change it.
-      // To keep it simple: always generate on create. On edit, if title changed significantly? 
-      // Let's just generate on create, and reuse on edit if not fetched.
-      
-      // However, the state doesn't hold the old icon in form. 
-      // Let's re-generate if it's new, OR reuse if editing and we want to preserve?
-      // Actually, let's just generate if creating. If editing, we find original chore.
-      
-      const existingChore = chores.find(c => c.id === editingChoreId);
-      
-      if (editingChoreId && existingChore && existingChore.title === choreTitle) {
-           iconSvg = existingChore.icon;
-      } else {
-           setIsGeneratingIcon(true);
-           iconSvg = await generateChoreIcon(choreTitle);
-           setIsGeneratingIcon(false);
       }
 
       const assignments = Array.from(selectedKids).map(kidId => ({
@@ -159,14 +152,15 @@ const ParentPortal: React.FC<ParentPortalProps> = ({
           timeOfDay,
           completedBy: [],
           dueDate: new Date().toISOString(),
-          icon: iconSvg
+          icon: selectedIcon
       };
+
+      const existingChore = chores.find(c => c.id === editingChoreId);
 
       if (editingChoreId && existingChore) {
           onUpdateChore({
               ...existingChore,
-              ...choreData,
-              icon: iconSvg || existingChore.icon // Fallback
+              ...choreData
           });
       } else {
           onAddChore(choreData);
@@ -251,7 +245,7 @@ const ParentPortal: React.FC<ParentPortalProps> = ({
             onClick={() => setActiveTab('rewards')}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'rewards' ? 'bg-blue-600 text-white' : 'hover:bg-slate-800'}`}
           >
-            <Sparkles size={20} /> Rewards
+            <Settings size={20} /> Rewards
             {wishlistItems.length > 0 && (
                <span className="ml-auto bg-rose-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">{wishlistItems.length}</span>
             )}
@@ -342,17 +336,31 @@ const ParentPortal: React.FC<ParentPortalProps> = ({
                                      placeholder="e.g. Make Bed, Wash Dishes"
                                      className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                                  />
-                                 <p className="text-xs text-slate-400 mt-1 flex items-center gap-1">
-                                     <Sparkles size={12}/> AI will generate a unique icon for this task.
-                                 </p>
                              </div>
+                             
+                             <div>
+                                <label className="block text-sm font-bold text-slate-700 mb-2">Select Icon</label>
+                                <div className="grid grid-cols-5 gap-3">
+                                   {CHORE_ICONS.map((icon, idx) => (
+                                      <button 
+                                        key={idx}
+                                        onClick={() => setSelectedIcon(icon.svg)}
+                                        className={`p-3 rounded-xl flex items-center justify-center transition-all ${selectedIcon === icon.svg ? 'bg-blue-600 text-white shadow-md scale-105' : 'bg-slate-50 text-slate-400 hover:bg-slate-100 hover:text-slate-600'}`}
+                                        title={icon.name}
+                                      >
+                                         <div className="w-6 h-6" dangerouslySetInnerHTML={{ __html: icon.svg }} />
+                                      </button>
+                                   ))}
+                                </div>
+                             </div>
+
                              <div>
                                  <label className="block text-sm font-bold text-slate-700 mb-2">Description (Optional)</label>
                                  <textarea 
                                      value={choreDesc}
                                      onChange={(e) => setChoreDesc(e.target.value)}
                                      placeholder="e.g. Put pillows in place and fold blanket"
-                                     className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none h-24"
+                                     className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none h-20"
                                  />
                              </div>
                              
@@ -441,10 +449,9 @@ const ParentPortal: React.FC<ParentPortalProps> = ({
                          </button>
                          <button 
                              onClick={handleSaveChore}
-                             disabled={isGeneratingIcon}
-                             className="px-8 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl flex items-center gap-2 disabled:opacity-70"
+                             className="px-8 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl flex items-center gap-2 shadow-lg shadow-blue-200"
                          >
-                             {isGeneratingIcon ? <Loader2 className="animate-spin" /> : <Save size={20} />}
+                             <Save size={20} />
                              {editingChoreId ? 'Update Chore' : 'Save Chore'}
                          </button>
                      </div>
