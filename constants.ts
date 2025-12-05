@@ -1,5 +1,5 @@
 
-import { User, Chore, Reward, CalendarEvent, UserRole, Meal, Photo, ChoreLog } from './types';
+import { User, Chore, Reward, CalendarEvent, UserRole, Meal, Photo, ChoreLog, CalendarSource, PhotoConfig } from './types';
 
 // Default initial state for a fresh app
 // We need at least one parent to allow login and configuration
@@ -30,6 +30,8 @@ export const INITIAL_REWARDS: Reward[] = [
 ];
 
 export const INITIAL_EVENTS: CalendarEvent[] = [];
+export const INITIAL_CALENDAR_SOURCES: CalendarSource[] = [];
+export const INITIAL_PHOTO_CONFIG: PhotoConfig = {};
 
 // Generate empty structure for meals to prevent errors, but empty titles
 const today = new Date();

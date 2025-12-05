@@ -20,6 +20,7 @@ interface FamilyWallDashboardProps {
   onUpdateMeal: (date: string, type: MealType, title: string) => void;
   currentUser: User | null;
   onLogout: () => void;
+  activeTabOverride?: 'calendar' | 'chores' | 'meals' | 'photos';
 }
 
 type CalendarViewMode = 'day' | 'week' | 'month';
@@ -81,7 +82,7 @@ const ConfettiStyles = () => (
 );
 
 const FamilyWallDashboard: React.FC<FamilyWallDashboardProps> = ({ 
-  familyName, users, events, chores, meals, photos, onSettingsClick, onToggleChore, onUpdateMeal, currentUser, onLogout
+  familyName, users, events, chores, meals, photos, onSettingsClick, onToggleChore, onUpdateMeal, currentUser, onLogout, activeTabOverride
 }) => {
   const [activeTab, setActiveTab] = useState<'calendar' | 'chores' | 'meals' | 'photos'>('calendar');
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -104,6 +105,14 @@ const FamilyWallDashboard: React.FC<FamilyWallDashboardProps> = ({
 
   // Grand Celebration State
   const [showGrandCelebration, setShowGrandCelebration] = useState<string | null>(null); // Kid ID
+
+  // Apply activeTabOverride if present (for idle timer)
+  useEffect(() => {
+    if (activeTabOverride) {
+        setActiveTab(activeTabOverride);
+        if (activeTabOverride === 'photos') setIsPlaying(true);
+    }
+  }, [activeTabOverride]);
 
   // Clock ticker
   useEffect(() => {
@@ -415,9 +424,9 @@ const FamilyWallDashboard: React.FC<FamilyWallDashboardProps> = ({
                                          <div className="flex-1 border-l-2 border-slate-100 pl-8 space-y-4">
                                              {dayEvents.length === 0 && <p className="text-slate-400 italic text-xl">No events scheduled.</p>}
                                              {dayEvents.map(ev => (
-                                                 <div key={ev.id} className="bg-blue-50 p-6 rounded-2xl border-l-8 border-blue-500">
+                                                 <div key={ev.id} className={`bg-opacity-20 p-6 rounded-2xl border-l-8 ${ev.color.replace('bg-', 'border-').replace('text-', 'border-')}`}>
                                                      <h4 className="text-2xl font-bold text-slate-800">{ev.title}</h4>
-                                                     <p className="text-blue-600 text-lg mt-1">
+                                                     <p className="text-slate-600 text-lg mt-1">
                                                         {new Date(ev.start).toLocaleTimeString([], {hour: 'numeric', minute:'2-digit'})} - 
                                                         {new Date(ev.end).toLocaleTimeString([], {hour: 'numeric', minute:'2-digit'})}
                                                      </p>
@@ -431,7 +440,7 @@ const FamilyWallDashboard: React.FC<FamilyWallDashboardProps> = ({
                                 <div key={idx} className={`min-h-[100px] border-r border-b border-slate-100 p-2 flex flex-col gap-1 transition-colors ${!isCurrentMonth && calendarMode === 'month' ? 'bg-slate-50/50 text-slate-300' : 'bg-white'} ${isToday ? 'ring-inset ring-2 ring-blue-200 bg-blue-50/30' : ''}`}>
                                     <div className="flex justify-between items-start"><span className={`text-sm font-medium w-7 h-7 flex items-center justify-center rounded-full ${isToday ? 'bg-blue-600 text-white' : (isCurrentMonth ? 'text-slate-700' : 'text-slate-300')}`}>{getDateNum(date)}</span></div>
                                     <div className="flex-1 flex flex-col gap-1 overflow-hidden">
-                                        {dayEvents.slice(0, 4).map(event => (<div key={event.id} className="text-xs truncate px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 border-l-2 border-blue-500">{event.title}</div>))}
+                                        {dayEvents.slice(0, 4).map(event => (<div key={event.id} className={`text-xs truncate px-1.5 py-0.5 rounded border-l-2 ${event.color}`}>{event.title}</div>))}
                                         {dayEvents.length > 4 && (<span className="text-[10px] text-slate-400 pl-1">+{dayEvents.length - 4} more</span>)}
                                     </div>
                                 </div>

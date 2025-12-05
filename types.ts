@@ -68,6 +68,23 @@ export interface CalendarEvent {
   color: string;
 }
 
+export interface CalendarSource {
+  id: string;
+  googleCalendarId: string;
+  name: string;
+  color: string;
+  type: 'personal' | 'family';
+  ownerId: string; // User ID of who linked it
+  ownerName: string;
+  accessToken: string; // Storing for prototype (Production should use refresh tokens/backend)
+}
+
+export interface PhotoConfig {
+  albumId?: string;
+  albumName?: string;
+  accessToken?: string;
+}
+
 export type MealType = 'breakfast' | 'lunch' | 'dinner';
 
 export interface Meal {
@@ -91,6 +108,8 @@ export interface AppState {
   choreHistory: ChoreLog[]; // New history array
   rewards: Reward[];
   events: CalendarEvent[];
+  calendarSources: CalendarSource[];
+  photoConfig: PhotoConfig;
   meals: Meal[];
   photos: Photo[];
   currentUser: User | null;

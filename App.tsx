@@ -1,17 +1,18 @@
 
-import React, { useState, useEffect } from 'react';
-import { User, Chore, Reward, UserRole, AppState, Meal, MealType, ChoreAssignment, ChoreLog } from './types';
-import { INITIAL_USERS, INITIAL_CHORES, INITIAL_REWARDS, INITIAL_EVENTS, INITIAL_MEALS, INITIAL_PHOTOS, INITIAL_CHORE_LOGS } from './constants';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { User, Chore, Reward, UserRole, AppState, Meal, MealType, ChoreAssignment, ChoreLog, CalendarSource, PhotoConfig, CalendarEvent } from './types';
+import { INITIAL_USERS, INITIAL_CHORES, INITIAL_REWARDS, INITIAL_EVENTS, INITIAL_MEALS, INITIAL_PHOTOS, INITIAL_CHORE_LOGS, INITIAL_CALENDAR_SOURCES, INITIAL_PHOTO_CONFIG } from './constants';
 import AuthScreen from './components/AuthScreen';
 import ParentPortal from './components/ParentPortal';
 import KidDashboard from './components/KidDashboard';
 import FamilyWallDashboard from './components/FamilyWallDashboard';
 import { LogOut } from 'lucide-react';
-import { fetchGoogleCalendarEvents } from './services/googleService';
+import { fetchGoogleCalendarEvents, fetchPhotosFromAlbum } from './services/googleService';
 
 type ViewState = 'WALL' | 'AUTH' | 'USER_SESSION';
 
 const STORAGE_KEY = 'familySyncData';
+const IDLE_TIMEOUT_MS = 300000; // 5 Minutes
 
 const App: React.FC = () => {
   // Initialize state from LocalStorage or default constants
@@ -56,6 +57,8 @@ const App: React.FC = () => {
           meals: Array.isArray(parsed.meals) ? parsed.meals : INITIAL_MEALS,
           rewards: Array.isArray(parsed.rewards) ? parsed.rewards : INITIAL_REWARDS,
           photos: Array.isArray(parsed.photos) ? parsed.photos : INITIAL_PHOTOS,
+          calendarSources: Array.isArray(parsed.calendarSources) ? parsed.calendarSources : INITIAL_CALENDAR_SOURCES,
+          photoConfig: parsed.photoConfig || INITIAL_PHOTO_CONFIG,
         };
       }
     } catch (e) {
@@ -71,11 +74,55 @@ const App: React.FC = () => {
       events: INITIAL_EVENTS,
       meals: INITIAL_MEALS,
       photos: INITIAL_PHOTOS,
-      currentUser: null
+      currentUser: null,
+      calendarSources: INITIAL_CALENDAR_SOURCES,
+      photoConfig: INITIAL_PHOTO_CONFIG,
     };
   });
 
   const [view, setView] = useState<ViewState>('WALL'); // Default to Wall
+  const [wallActiveTab, setWallActiveTab] = useState<'calendar' | 'chores' | 'meals' | 'photos' | undefined>(undefined);
+  
+  // Idle Timer Logic
+  const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const resetIdleTimer = useCallback(() => {
+    if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+    
+    // Only run idle logic if we aren't already in slideshow mode or auth mode
+    // And if we have photos to show
+    if (view !== 'AUTH' && state.photos.length > 0) {
+        idleTimerRef.current = setTimeout(() => {
+            setView('WALL');
+            setWallActiveTab('photos');
+        }, IDLE_TIMEOUT_MS);
+    }
+  }, [view, state.photos.length]);
+
+  useEffect(() => {
+      // Attach listeners for activity
+      const events = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart'];
+      const handleActivity = () => {
+          resetIdleTimer();
+          // If user interacts, reset active tab override so they can navigate normally
+          // Only clear if we were forced into photos mode by idle
+          if (wallActiveTab === 'photos') {
+             // We don't unset immediately to avoid jarring transitions, 
+             // but user clicking nav buttons inside WallDashboard will handle state there.
+             // We just set this prop to undefined to let component manage itself again.
+             setWallActiveTab(undefined); 
+          }
+      };
+
+      events.forEach(e => window.addEventListener(e, handleActivity));
+      resetIdleTimer(); // Start timer
+
+      return () => {
+          events.forEach(e => window.removeEventListener(e, handleActivity));
+          if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+      };
+  }, [resetIdleTimer, wallActiveTab]);
+
 
   // Save to LocalStorage whenever state changes
   useEffect(() => {
@@ -85,6 +132,42 @@ const App: React.FC = () => {
       console.error("Failed to save state", e);
     }
   }, [state]);
+
+  // Sync Logic - Fetch external data
+  useEffect(() => {
+      const syncData = async () => {
+          // 1. Fetch Calendar Events
+          let allEvents: CalendarEvent[] = [];
+          
+          if (state.calendarSources.length > 0) {
+              for (const source of state.calendarSources) {
+                  const prefix = source.type === 'personal' ? `[${source.ownerName}]` : '';
+                  const fetched = await fetchGoogleCalendarEvents(source.accessToken, source.googleCalendarId, source.color, prefix);
+                  allEvents = [...allEvents, ...fetched];
+              }
+              // Update state with new events if we got any (avoids wiping local state on network fail)
+              if (allEvents.length > 0) {
+                  setState(prev => ({ ...prev, events: allEvents }));
+              }
+          }
+
+          // 2. Fetch Photos
+          if (state.photoConfig.accessToken && state.photoConfig.albumId) {
+              const fetchedPhotos = await fetchPhotosFromAlbum(state.photoConfig.accessToken, state.photoConfig.albumId);
+              if (fetchedPhotos.length > 0) {
+                  setState(prev => ({ ...prev, photos: fetchedPhotos }));
+              }
+          }
+      };
+
+      // Initial Sync
+      syncData();
+      
+      // Poll every 15 minutes
+      const interval = setInterval(syncData, 15 * 60 * 1000);
+      return () => clearInterval(interval);
+  }, [state.calendarSources, state.photoConfig]);
+
 
   const handleLogin = (user: User) => {
     setState(prev => ({ ...prev, currentUser: user }));
@@ -132,6 +215,24 @@ const App: React.FC = () => {
     }));
   };
 
+  const handleAddCalendarSource = (source: CalendarSource) => {
+      setState(prev => ({
+          ...prev,
+          calendarSources: [...prev.calendarSources, source]
+      }));
+  };
+
+  const handleRemoveCalendarSource = (id: string) => {
+      setState(prev => ({
+          ...prev,
+          calendarSources: prev.calendarSources.filter(s => s.id !== id)
+      }));
+  };
+
+  const handleSetPhotoConfig = (config: PhotoConfig) => {
+      setState(prev => ({ ...prev, photoConfig: config }));
+  };
+
   // Shared Reward Redemption Logic
   const handleRedeemSharedReward = (rewardId: string) => {
       const reward = state.rewards.find(r => r.id === rewardId);
@@ -161,8 +262,6 @@ const App: React.FC = () => {
           return u;
       });
 
-      // Mark reward as redeemed (optional, or just keep it available)
-      // For now, let's just deduct points and show success
       setState(prev => ({ ...prev, users: updatedUsers }));
       alert(`Success! Redeemed ${reward.title}. Deducted ${costPerKid} points from each kid.`);
   };
@@ -350,6 +449,7 @@ const App: React.FC = () => {
         onUpdateMeal={handleUpdateMeal}
         currentUser={state.currentUser} // Likely null in wall mode, but passed if active
         onLogout={handleLogout}
+        activeTabOverride={wallActiveTab}
       />
     );
   }
@@ -372,6 +472,9 @@ const App: React.FC = () => {
               chores={state.chores}
               rewards={state.rewards}
               choreHistory={state.choreHistory}
+              calendarSources={state.calendarSources}
+              photoConfig={state.photoConfig}
+              currentUser={state.currentUser}
               onAddChore={handleAddChore}
               onUpdateChore={handleUpdateChore}
               onDeleteChore={handleDeleteChore}
@@ -383,6 +486,9 @@ const App: React.FC = () => {
               onUpdateReward={handleUpdateReward}
               onDeleteReward={handleDeleteReward}
               onRedeemSharedReward={handleRedeemSharedReward}
+              onAddCalendarSource={handleAddCalendarSource}
+              onRemoveCalendarSource={handleRemoveCalendarSource}
+              onSetPhotoConfig={handleSetPhotoConfig}
            />
          ) : (
            <KidDashboard 
@@ -391,6 +497,7 @@ const App: React.FC = () => {
               rewards={state.rewards}
               onToggleChore={handleToggleChore}
               onRequestReward={handleRequestReward}
+              onAddCalendarSource={handleAddCalendarSource}
            />
          )}
       </div>

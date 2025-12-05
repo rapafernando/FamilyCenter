@@ -1,4 +1,5 @@
-import { CalendarEvent } from '../types';
+
+import { CalendarEvent, Photo } from '../types';
 import { GOOGLE_CLIENT_ID, GOOGLE_SCOPES } from '../config';
 
 // Declare types for the Google Identity Services client
@@ -9,7 +10,6 @@ declare global {
 }
 
 let tokenClient: any;
-let accessToken: string | null = null;
 
 /**
  * Initialize the Google Identity Services Token Client.
@@ -22,7 +22,6 @@ export const initGoogleClient = (callback: (response: any) => void) => {
       scope: GOOGLE_SCOPES,
       callback: (tokenResponse: any) => {
         if (tokenResponse && tokenResponse.access_token) {
-          accessToken = tokenResponse.access_token;
           callback(tokenResponse);
         }
       },
@@ -35,9 +34,6 @@ export const initGoogleClient = (callback: (response: any) => void) => {
  */
 export const signInWithGoogle = () => {
   if (tokenClient) {
-    // Request access token. 
-    // 'prompt': '' ensures it doesn't force re-consent every time if valid, 
-    // but for a kiosk, you might handle token refresh differently.
     tokenClient.requestAccessToken();
   } else {
     console.error("Google Token Client not initialized");
@@ -48,20 +44,92 @@ export const signInWithGoogle = () => {
 /**
  * Fetches the user's profile information using the access token.
  */
-export const fetchUserProfile = async () => {
+export const fetchUserProfile = async (accessToken: string) => {
   if (!accessToken) throw new Error("No access token");
-
   const response = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
-
   return response.json();
 };
 
 /**
- * Fetches upcoming events from the user's primary calendar.
+ * Fetch list of available calendars for the user
  */
-export const fetchGoogleCalendarEvents = async (): Promise<CalendarEvent[]> => {
+export const fetchCalendarList = async (accessToken: string) => {
+  if (!accessToken) return [];
+  try {
+      const response = await fetch('https://www.googleapis.com/calendar/v3/users/me/calendarList', {
+          headers: { Authorization: `Bearer ${accessToken}` }
+      });
+      const data = await response.json();
+      return data.items || [];
+  } catch (e) {
+      console.error("Error fetching calendar list", e);
+      return [];
+  }
+};
+
+/**
+ * Fetch list of Google Photo Albums
+ */
+export const fetchAlbums = async (accessToken: string) => {
+    if (!accessToken) return [];
+    try {
+        const response = await fetch('https://photoslibrary.googleapis.com/v1/albums', {
+            headers: { Authorization: `Bearer ${accessToken}` }
+        });
+        const data = await response.json();
+        return data.albums || [];
+    } catch (e) {
+        console.error("Error fetching albums", e);
+        return [];
+    }
+};
+
+/**
+ * Fetch photos from a specific album
+ */
+export const fetchPhotosFromAlbum = async (accessToken: string, albumId: string): Promise<Photo[]> => {
+    if (!accessToken || !albumId) return [];
+    try {
+        const response = await fetch('https://photoslibrary.googleapis.com/v1/mediaItems:search', {
+            method: 'POST',
+            headers: { 
+                Authorization: `Bearer ${accessToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                albumId: albumId,
+                pageSize: 50
+            })
+        });
+        const data = await response.json();
+        
+        if (!data.mediaItems) return [];
+
+        return data.mediaItems
+            .filter((item: any) => item.mimeType?.startsWith('image/'))
+            .map((item: any) => ({
+                id: item.id,
+                url: `${item.baseUrl}=w2048-h1024`, // Request specific size
+                date: item.mediaMetadata?.creationTime || new Date().toISOString(),
+                location: '' // API doesn't always return location easily without extra scopes/processing
+            }));
+    } catch (e) {
+        console.error("Error fetching photos", e);
+        return [];
+    }
+};
+
+/**
+ * Fetches upcoming events from a specific calendar
+ */
+export const fetchGoogleCalendarEvents = async (
+    accessToken: string, 
+    calendarId: string = 'primary',
+    color: string = 'bg-blue-100 text-blue-800 border-blue-200',
+    prefix: string = ''
+): Promise<CalendarEvent[]> => {
   if (!accessToken) return [];
 
   const now = new Date();
@@ -70,7 +138,7 @@ export const fetchGoogleCalendarEvents = async (): Promise<CalendarEvent[]> => {
 
   try {
     const response = await fetch(
-      `https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${now.toISOString()}&timeMax=${nextMonth.toISOString()}&singleEvents=true&orderBy=startTime`,
+      `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?timeMin=${now.toISOString()}&timeMax=${nextMonth.toISOString()}&singleEvents=true&orderBy=startTime`,
       {
         headers: { Authorization: `Bearer ${accessToken}` },
       }
@@ -82,11 +150,11 @@ export const fetchGoogleCalendarEvents = async (): Promise<CalendarEvent[]> => {
 
     return data.items.map((item: any) => ({
       id: item.id,
-      title: item.summary || 'Busy',
+      title: prefix ? `${prefix} ${item.summary}` : (item.summary || 'Busy'),
       start: item.start.dateTime || item.start.date, // Handle all-day events
       end: item.end.dateTime || item.end.date,
-      type: 'family', // Default to family, logic could be enhanced to parse colors
-      color: 'bg-blue-100 text-blue-800 border-blue-200' // Default sync color
+      type: 'family', 
+      color: color 
     }));
 
   } catch (error) {

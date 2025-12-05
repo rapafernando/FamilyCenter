@@ -1,7 +1,9 @@
+
 import React, { useState } from 'react';
-import { User, Chore, Reward } from '../types';
-import { CheckCircle2, Circle, Gift, Trophy, Star, Plus, Clock } from 'lucide-react';
+import { User, Chore, Reward, CalendarSource } from '../types';
+import { CheckCircle2, Circle, Gift, Trophy, Star, Plus, Clock, Settings, Link } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
+import { initGoogleClient, signInWithGoogle, fetchCalendarList } from '../services/googleService';
 
 interface KidDashboardProps {
   currentUser: User;
@@ -9,12 +11,18 @@ interface KidDashboardProps {
   rewards: Reward[];
   onToggleChore: (id: string, userId?: string) => void;
   onRequestReward: (title: string, cost: number) => void;
+  onAddCalendarSource: (source: CalendarSource) => void;
 }
 
-const KidDashboard: React.FC<KidDashboardProps> = ({ currentUser, chores, rewards, onToggleChore, onRequestReward }) => {
-  const [activeTab, setActiveTab] = useState<'chores' | 'rewards' | 'wishlist'>('chores');
+const KidDashboard: React.FC<KidDashboardProps> = ({ currentUser, chores, rewards, onToggleChore, onRequestReward, onAddCalendarSource }) => {
+  const [activeTab, setActiveTab] = useState<'chores' | 'rewards' | 'wishlist' | 'settings'>('chores');
   const [wishInput, setWishInput] = useState('');
   const [wishCost, setWishCost] = useState(100);
+  
+  // Google Sync State
+  const [isGoogleLinked, setIsGoogleLinked] = useState(false);
+  const [fetchedCalendars, setFetchedCalendars] = useState<any[]>([]);
+  const [currentAccessToken, setCurrentAccessToken] = useState<string | null>(null);
 
   // Filter chores where current user is in the assignments list
   const myChores = chores.filter(c => c.assignments.some(a => a.userId === currentUser.id));
@@ -33,6 +41,33 @@ const KidDashboard: React.FC<KidDashboardProps> = ({ currentUser, chores, reward
     }
   };
 
+  const handleGoogleLink = () => {
+    initGoogleClient((response) => {
+        if(response && response.access_token) {
+            setCurrentAccessToken(response.access_token);
+            setIsGoogleLinked(true);
+            fetchCalendarList(response.access_token).then(setFetchedCalendars);
+        }
+    });
+    signInWithGoogle();
+  };
+
+  const handleSyncCalendar = (cal: any) => {
+    if (!currentAccessToken) return;
+    
+    onAddCalendarSource({
+        id: `src-${Date.now()}`,
+        googleCalendarId: cal.id,
+        name: cal.summary,
+        color: 'bg-green-100 text-green-800 border-green-200', // Default kid color
+        type: 'personal',
+        ownerId: currentUser.id,
+        ownerName: currentUser.name,
+        accessToken: currentAccessToken
+    });
+    alert(`Synced ${cal.summary}! Events will appear on the wall.`);
+  };
+
   return (
     <div className="flex flex-col h-full bg-slate-50">
       {/* Header */}
@@ -44,39 +79,46 @@ const KidDashboard: React.FC<KidDashboardProps> = ({ currentUser, chores, reward
             <p className="text-slate-500">Let's crush today!</p>
           </div>
         </div>
-        <div className="bg-yellow-50 px-6 py-3 rounded-2xl flex items-center gap-3 border border-yellow-100">
-          <div className="bg-yellow-400 p-2 rounded-full text-white">
-            <Star size={24} fill="white" />
-          </div>
-          <div>
-            <span className="block text-sm text-yellow-700 font-bold uppercase tracking-wide">My Points</span>
-            <span className="text-3xl font-black text-slate-800">{currentUser.points}</span>
-          </div>
+        <div className="flex gap-3">
+            <button onClick={() => setActiveTab('settings')} className="bg-slate-100 p-3 rounded-2xl hover:bg-slate-200">
+                <Settings className="text-slate-600"/>
+            </button>
+            <div className="bg-yellow-50 px-6 py-3 rounded-2xl flex items-center gap-3 border border-yellow-100">
+            <div className="bg-yellow-400 p-2 rounded-full text-white">
+                <Star size={24} fill="white" />
+            </div>
+            <div>
+                <span className="block text-sm text-yellow-700 font-bold uppercase tracking-wide">My Points</span>
+                <span className="text-3xl font-black text-slate-800">{currentUser.points}</span>
+            </div>
+            </div>
         </div>
       </div>
 
       <div className="p-6 flex-1 overflow-y-auto">
         {/* Navigation Tabs */}
-        <div className="flex gap-4 mb-8">
-          <button 
-            onClick={() => setActiveTab('chores')}
-            className={`flex-1 py-4 rounded-xl font-bold text-lg transition-all ${activeTab === 'chores' ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' : 'bg-white text-slate-500 hover:bg-slate-100'}`}
-          >
-            My Chores
-          </button>
-          <button 
-            onClick={() => setActiveTab('rewards')}
-            className={`flex-1 py-4 rounded-xl font-bold text-lg transition-all ${activeTab === 'rewards' ? 'bg-purple-600 text-white shadow-lg shadow-purple-200' : 'bg-white text-slate-500 hover:bg-slate-100'}`}
-          >
-            Rewards Store
-          </button>
-           <button 
-            onClick={() => setActiveTab('wishlist')}
-            className={`flex-1 py-4 rounded-xl font-bold text-lg transition-all ${activeTab === 'wishlist' ? 'bg-pink-500 text-white shadow-lg shadow-pink-200' : 'bg-white text-slate-500 hover:bg-slate-100'}`}
-          >
-            My Wishlist
-          </button>
-        </div>
+        {activeTab !== 'settings' && (
+            <div className="flex gap-4 mb-8">
+            <button 
+                onClick={() => setActiveTab('chores')}
+                className={`flex-1 py-4 rounded-xl font-bold text-lg transition-all ${activeTab === 'chores' ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' : 'bg-white text-slate-500 hover:bg-slate-100'}`}
+            >
+                My Chores
+            </button>
+            <button 
+                onClick={() => setActiveTab('rewards')}
+                className={`flex-1 py-4 rounded-xl font-bold text-lg transition-all ${activeTab === 'rewards' ? 'bg-purple-600 text-white shadow-lg shadow-purple-200' : 'bg-white text-slate-500 hover:bg-slate-100'}`}
+            >
+                Rewards Store
+            </button>
+            <button 
+                onClick={() => setActiveTab('wishlist')}
+                className={`flex-1 py-4 rounded-xl font-bold text-lg transition-all ${activeTab === 'wishlist' ? 'bg-pink-500 text-white shadow-lg shadow-pink-200' : 'bg-white text-slate-500 hover:bg-slate-100'}`}
+            >
+                My Wishlist
+            </button>
+            </div>
+        )}
 
         {/* Content */}
         {activeTab === 'chores' && (
@@ -243,6 +285,39 @@ const KidDashboard: React.FC<KidDashboardProps> = ({ currentUser, chores, reward
             </div>
           </div>
         )}
+
+        {/* Settings Tab (Google Sync) */}
+        {activeTab === 'settings' && (
+            <div className="max-w-xl mx-auto mt-8 bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
+                <button onClick={() => setActiveTab('chores')} className="mb-6 text-sm text-slate-500 font-bold uppercase tracking-wider hover:text-blue-500">&larr; Back to Dashboard</button>
+                <h2 className="text-2xl font-bold text-slate-800 mb-6 flex items-center gap-3"><Settings/> My Settings</h2>
+                
+                <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200">
+                    <h3 className="font-bold text-slate-800 mb-2 flex items-center gap-2"><Link size={18}/> Connect Calendar</h3>
+                    <p className="text-sm text-slate-500 mb-6">Sync your personal Google Calendar to the family wall so everyone knows your schedule.</p>
+                    
+                    {!isGoogleLinked ? (
+                        <button onClick={handleGoogleLink} className="bg-white border border-slate-300 hover:bg-slate-100 px-4 py-2 rounded-xl font-bold text-slate-700 flex items-center gap-2">
+                            <img src="https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg" className="w-5 h-5"/>
+                            Link Google Account
+                        </button>
+                    ) : (
+                        <div className="space-y-4">
+                            <p className="text-sm font-bold text-green-600">Account Linked!</p>
+                            <div className="space-y-2">
+                                {fetchedCalendars.map(cal => (
+                                    <div key={cal.id} className="flex items-center justify-between bg-white p-3 rounded-xl border border-slate-200">
+                                        <span className="font-medium text-slate-700">{cal.summary}</span>
+                                        <button onClick={() => handleSyncCalendar(cal)} className="bg-blue-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg">Add to Wall</button>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </div>
+        )}
+
       </div>
     </div>
   );

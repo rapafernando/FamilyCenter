@@ -1,8 +1,9 @@
 
 import React, { useState } from 'react';
-import { User, Chore, Reward, UserRole, TimeOfDay, ChoreFrequency, ChoreLog } from '../types';
-import { Calendar as CalIcon, CheckSquare, Settings, Plus, Trash2, UserPlus, Save, Clock, Repeat, MoreVertical, Edit, Copy, BarChart2, TrendingUp, History, Gift, Users } from 'lucide-react';
+import { User, Chore, Reward, UserRole, TimeOfDay, ChoreFrequency, ChoreLog, CalendarSource, PhotoConfig } from '../types';
+import { Calendar as CalIcon, CheckSquare, Settings, Plus, Trash2, UserPlus, Save, Clock, Repeat, MoreVertical, Edit, Copy, BarChart2, TrendingUp, History, Gift, Users, Link, Image as ImageIcon, RefreshCw } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line } from 'recharts';
+import { initGoogleClient, signInWithGoogle, fetchCalendarList, fetchAlbums } from '../services/googleService';
 
 interface ParentPortalProps {
   familyName: string;
@@ -10,6 +11,9 @@ interface ParentPortalProps {
   chores: Chore[];
   choreHistory?: ChoreLog[];
   rewards: Reward[];
+  calendarSources: CalendarSource[];
+  photoConfig: PhotoConfig;
+  currentUser: User;
   onAddChore: (chore: Omit<Chore, 'id'>) => void;
   onUpdateChore: (chore: Chore) => void;
   onDeleteChore: (id: string) => void;
@@ -21,6 +25,9 @@ interface ParentPortalProps {
   onUpdateReward: (reward: Reward) => void;
   onDeleteReward: (id: string) => void;
   onRedeemSharedReward: (id: string) => void;
+  onAddCalendarSource: (source: CalendarSource) => void;
+  onRemoveCalendarSource: (id: string) => void;
+  onSetPhotoConfig: (config: PhotoConfig) => void;
 }
 
 const CHORE_ICONS = [
@@ -36,12 +43,22 @@ const CHORE_ICONS = [
   { name: 'Car', svg: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"/><circle cx="7" cy="17" r="2"/><path d="M9 17h6"/><circle cx="17" cy="17" r="2"/></svg>' }
 ];
 
+const COLORS = [
+    { name: 'Blue', value: 'bg-blue-100 text-blue-800 border-blue-200' },
+    { name: 'Red', value: 'bg-red-100 text-red-800 border-red-200' },
+    { name: 'Green', value: 'bg-green-100 text-green-800 border-green-200' },
+    { name: 'Purple', value: 'bg-purple-100 text-purple-800 border-purple-200' },
+    { name: 'Orange', value: 'bg-orange-100 text-orange-800 border-orange-200' },
+    { name: 'Pink', value: 'bg-pink-100 text-pink-800 border-pink-200' },
+];
+
 const ParentPortal: React.FC<ParentPortalProps> = ({ 
-  familyName, users, chores, rewards, choreHistory = [],
+  familyName, users, chores, rewards, choreHistory = [], calendarSources, photoConfig, currentUser,
   onAddChore, onUpdateChore, onDeleteChore, onApproveReward, 
-  onUpdateFamilyName, onAddUser, onDeleteUser, onAddReward, onUpdateReward, onDeleteReward, onRedeemSharedReward
+  onUpdateFamilyName, onAddUser, onDeleteUser, onAddReward, onUpdateReward, onDeleteReward, onRedeemSharedReward,
+  onAddCalendarSource, onRemoveCalendarSource, onSetPhotoConfig
 }) => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'chores' | 'rewards' | 'settings' | 'history'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'chores' | 'rewards' | 'settings' | 'history' | 'integrations'>('overview');
   
   // Settings Form State
   const [newName, setNewName] = useState('');
@@ -72,11 +89,17 @@ const ParentPortal: React.FC<ParentPortalProps> = ({
   // Approval State
   const [approvalCosts, setApprovalCosts] = useState<Record<string, number>>({});
 
-  const kids = users.filter(u => u.role === UserRole.KID);
+  // Integration State
+  const [fetchedCalendars, setFetchedCalendars] = useState<any[]>([]);
+  const [fetchedAlbums, setFetchedAlbums] = useState<any[]>([]);
+  const [isGoogleLinked, setIsGoogleLinked] = useState(false);
+  const [currentAccessToken, setCurrentAccessToken] = useState<string | null>(null);
   
-  // New Logic: 
-  // Pending = Not Approved (regardless of who created it, though mostly kids)
-  // Active = Approved (includes parent created + approved wishlist)
+  // New Integration Config State
+  const [selectedCalColor, setSelectedCalColor] = useState(COLORS[0].value);
+  const [selectedCalType, setSelectedCalType] = useState<'family' | 'personal'>('personal');
+
+  const kids = users.filter(u => u.role === UserRole.KID);
   const pendingRewards = rewards.filter(r => !r.approved);
   const activeRewards = rewards.filter(r => r.approved);
 
@@ -229,7 +252,47 @@ const ParentPortal: React.FC<ParentPortalProps> = ({
       setApprovalCosts(newCosts);
   };
 
+  // Integration Handlers
+  const handleGoogleLink = () => {
+      initGoogleClient((response) => {
+          if(response && response.access_token) {
+              setCurrentAccessToken(response.access_token);
+              setIsGoogleLinked(true);
+              // Fetch Lists
+              fetchCalendarList(response.access_token).then(setFetchedCalendars);
+              fetchAlbums(response.access_token).then(setFetchedAlbums);
+          }
+      });
+      signInWithGoogle();
+  };
+
+  const handleSyncCalendar = (cal: any) => {
+      if (!currentAccessToken) return;
+      
+      onAddCalendarSource({
+          id: `src-${Date.now()}`,
+          googleCalendarId: cal.id,
+          name: cal.summary,
+          color: selectedCalColor,
+          type: selectedCalType,
+          ownerId: currentUser.id,
+          ownerName: currentUser.name,
+          accessToken: currentAccessToken
+      });
+  };
+
+  const handleSyncAlbum = (album: any) => {
+      if (!currentAccessToken) return;
+
+      onSetPhotoConfig({
+          albumId: album.id,
+          albumName: album.title,
+          accessToken: currentAccessToken
+      });
+  };
+
   const renderFreqConfig = () => {
+      // ... (Same as before)
       if (frequency === 'daily') {
           return (
               <div className="flex gap-4 mt-2">
@@ -285,10 +348,6 @@ const ParentPortal: React.FC<ParentPortalProps> = ({
      });
   };
 
-  const getRecentLogs = () => {
-      return [...choreHistory].sort((a,b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()).slice(0, 20);
-  };
-
   return (
     <div className="flex h-full bg-slate-100">
       {/* Sidebar */}
@@ -302,6 +361,7 @@ const ParentPortal: React.FC<ParentPortalProps> = ({
           <button onClick={() => setActiveTab('history')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'history' ? 'bg-blue-600 text-white' : 'hover:bg-slate-800'}`}><BarChart2 size={20} /> History & Analytics</button>
           <button onClick={() => setActiveTab('chores')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'chores' ? 'bg-blue-600 text-white' : 'hover:bg-slate-800'}`}><CheckSquare size={20} /> Chores Management</button>
           <button onClick={() => setActiveTab('rewards')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'rewards' ? 'bg-blue-600 text-white' : 'hover:bg-slate-800'}`}><Gift size={20} /> Rewards {pendingRewards.length > 0 && (<span className="ml-auto bg-rose-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">{pendingRewards.length}</span>)}</button>
+          <button onClick={() => setActiveTab('integrations')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'integrations' ? 'bg-blue-600 text-white' : 'hover:bg-slate-800'}`}><Link size={20} /> Integrations</button>
           <button onClick={() => setActiveTab('settings')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'settings' ? 'bg-blue-600 text-white' : 'hover:bg-slate-800'}`}><Settings size={20} /> Settings</button>
         </nav>
         <div className="mt-auto pt-6 border-t border-slate-800"><p className="text-xs text-center opacity-40">Connected as Parent</p></div>
@@ -310,7 +370,7 @@ const ParentPortal: React.FC<ParentPortalProps> = ({
       {/* Main Content */}
       <div className="flex-1 overflow-y-auto p-6 md:p-10">
         
-        {/* ... (Keep Overview, History tabs as previously defined) ... */}
+        {/* Overview Tab */}
         {activeTab === 'overview' && (
            <div className="space-y-6">
               <h2 className="text-3xl font-bold text-slate-800">Family Overview</h2>
@@ -353,7 +413,7 @@ const ParentPortal: React.FC<ParentPortalProps> = ({
             </div>
         )}
 
-        {/* ... (Keep Chores Tab Logic) ... */}
+        {/* Chores Tab */}
         {activeTab === 'chores' && (
           <div className="space-y-8">
              <div className="flex items-center justify-between"><div><h2 className="text-2xl font-bold text-slate-800">Chore Management</h2><p className="text-slate-500">Create tasks and assign them to your kids.</p></div><button onClick={() => { resetForm(); setIsCreatingChore(!isCreatingChore); }} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl font-bold flex items-center gap-2 transition-colors">{isCreatingChore ? 'Cancel' : <><Plus size={20} /> Add New Chore</>}</button></div>
@@ -407,7 +467,7 @@ const ParentPortal: React.FC<ParentPortalProps> = ({
           </div>
         )}
 
-        {/* Enhanced Rewards Tab */}
+        {/* Rewards Tab */}
         {activeTab === 'rewards' && (
            <div className="space-y-6">
                 <div className="flex items-center justify-between">
@@ -415,6 +475,7 @@ const ParentPortal: React.FC<ParentPortalProps> = ({
                     <button onClick={() => { setIsCreatingReward(!isCreatingReward); setEditingRewardId(null); setRewardTitle(''); setRewardCost(100); }} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl font-bold flex items-center gap-2 transition-colors"><Plus size={20} /> Create Reward</button>
                 </div>
 
+                {/* (Keep Existing Reward Form & List Code) */}
                 {isCreatingReward && (
                      <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 animate-in fade-in slide-in-from-top-4">
                          <h3 className="text-lg font-bold mb-4">{editingRewardId ? 'Edit Reward' : 'Create New Reward'}</h3>
@@ -435,8 +496,8 @@ const ParentPortal: React.FC<ParentPortalProps> = ({
                          </div>
                      </div>
                 )}
-
-                {/* Pending Wishlist */}
+                
+                {/* Pending & Active Lists (Keep as previous) */}
                 {pendingRewards.length > 0 && (
                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
                         <h3 className="font-bold text-lg mb-4 text-slate-800">Wishlist Requests (Pending)</h3>
@@ -500,7 +561,118 @@ const ParentPortal: React.FC<ParentPortalProps> = ({
            </div>
         )}
 
-        {/* ... (Keep Settings Tab) ... */}
+        {/* Integrations Tab */}
+        {activeTab === 'integrations' && (
+            <div className="space-y-8 max-w-4xl">
+                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                     <div className="flex justify-between items-start mb-6">
+                         <div>
+                            <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2"><Link size={24} className="text-blue-500"/> Google Integrations</h3>
+                            <p className="text-slate-500 mt-1">Sync Calendars and Photos from your Google Account.</p>
+                         </div>
+                         {!isGoogleLinked ? (
+                             <button onClick={handleGoogleLink} className="bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 px-4 py-2 rounded-xl font-bold flex items-center gap-2 transition-all">
+                                 <svg className="w-5 h-5" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
+                                 Link Google Account
+                             </button>
+                         ) : (
+                             <div className="flex items-center gap-2 text-green-600 bg-green-50 px-3 py-1 rounded-lg font-bold text-sm">
+                                 <RefreshCw size={14}/> Linked
+                             </div>
+                         )}
+                     </div>
+
+                     {/* Calendars Sync Section */}
+                     {isGoogleLinked && fetchedCalendars.length > 0 && (
+                         <div className="mb-8 border-t border-slate-100 pt-6">
+                             <h4 className="font-bold text-lg text-slate-800 mb-4 flex items-center gap-2"><CalIcon size={18} /> Select Calendars to Sync</h4>
+                             <div className="bg-slate-50 p-4 rounded-xl space-y-3">
+                                 <div className="flex gap-4 mb-4 bg-white p-3 rounded-lg border border-slate-200 items-center">
+                                      <span className="text-sm font-bold text-slate-500 uppercase">Defaults:</span>
+                                      <select className="px-3 py-1.5 rounded-lg border border-slate-300 text-sm" value={selectedCalType} onChange={(e) => setSelectedCalType(e.target.value as any)}>
+                                          <option value="personal">Type: Personal (Prefix Name)</option>
+                                          <option value="family">Type: Family (No Prefix)</option>
+                                      </select>
+                                      <div className="flex gap-1">
+                                          {COLORS.map(c => (
+                                              <button 
+                                                key={c.name} 
+                                                className={`w-6 h-6 rounded-full border-2 ${selectedCalColor === c.value ? 'ring-2 ring-offset-1 ring-slate-400' : 'border-transparent'}`} 
+                                                onClick={() => setSelectedCalColor(c.value)}
+                                                style={{backgroundColor: c.name.toLowerCase() === 'white' ? '#fff' : c.name}}
+                                                title={c.name}
+                                              >
+                                                <div className={`w-full h-full rounded-full ${c.value.split(' ')[0]}`}></div>
+                                              </button>
+                                          ))}
+                                      </div>
+                                 </div>
+                                 
+                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                     {fetchedCalendars.map(cal => {
+                                         const isSynced = calendarSources.some(s => s.googleCalendarId === cal.id);
+                                         return (
+                                             <div key={cal.id} className="flex items-center justify-between bg-white p-3 rounded-lg border border-slate-200">
+                                                 <span className="font-medium text-slate-700 truncate flex-1 mr-2">{cal.summary}</span>
+                                                 {isSynced ? (
+                                                     <button onClick={() => {
+                                                         const source = calendarSources.find(s => s.googleCalendarId === cal.id);
+                                                         if(source) onRemoveCalendarSource(source.id);
+                                                     }} className="text-red-500 text-xs font-bold hover:underline">Remove</button>
+                                                 ) : (
+                                                     <button onClick={() => handleSyncCalendar(cal)} className="bg-blue-600 text-white px-3 py-1 rounded-lg text-xs font-bold hover:bg-blue-700">Sync</button>
+                                                 )}
+                                             </div>
+                                         );
+                                     })}
+                                 </div>
+                             </div>
+                             
+                             {/* Synced Calendars List */}
+                             {calendarSources.length > 0 && (
+                                 <div className="mt-4">
+                                     <h5 className="text-sm font-bold text-slate-500 uppercase mb-2">Currently Synced</h5>
+                                     <div className="space-y-2">
+                                         {calendarSources.map(source => (
+                                             <div key={source.id} className={`flex items-center justify-between p-3 rounded-lg border ${source.color}`}>
+                                                 <div>
+                                                     <span className="font-bold">{source.name}</span>
+                                                     <span className="text-xs opacity-70 ml-2">({source.type === 'personal' ? `Personal: ${source.ownerName}` : 'Family'})</span>
+                                                 </div>
+                                                 <button onClick={() => onRemoveCalendarSource(source.id)} className="p-1 hover:bg-white/50 rounded"><Trash2 size={16}/></button>
+                                             </div>
+                                         ))}
+                                     </div>
+                                 </div>
+                             )}
+                         </div>
+                     )}
+
+                     {/* Photos Sync Section */}
+                     {isGoogleLinked && fetchedAlbums.length > 0 && (
+                         <div className="border-t border-slate-100 pt-6">
+                             <h4 className="font-bold text-lg text-slate-800 mb-4 flex items-center gap-2"><ImageIcon size={18} /> Select Photo Album (Screensaver)</h4>
+                             <p className="text-sm text-slate-500 mb-4">Choose an album to display when the dashboard is idle.</p>
+                             
+                             <div className="grid grid-cols-2 md:grid-cols-3 gap-4 max-h-64 overflow-y-auto p-2">
+                                 {fetchedAlbums.map(album => (
+                                     <button 
+                                        key={album.id}
+                                        onClick={() => handleSyncAlbum(album)}
+                                        className={`p-4 rounded-xl border text-left transition-all ${photoConfig.albumId === album.id ? 'bg-purple-50 border-purple-300 ring-2 ring-purple-200' : 'bg-white border-slate-200 hover:border-purple-300'}`}
+                                     >
+                                         <h5 className="font-bold text-slate-800 truncate">{album.title}</h5>
+                                         <p className="text-xs text-slate-500">{album.mediaItemsCount} items</p>
+                                     </button>
+                                 ))}
+                             </div>
+                         </div>
+                     )}
+                 </div>
+            </div>
+        )}
+
+        {/* Settings Tab */}
         {activeTab === 'settings' && (
           <div className="space-y-8 max-w-4xl">
             {/* General Settings */}
