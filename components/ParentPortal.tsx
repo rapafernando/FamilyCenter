@@ -211,6 +211,18 @@ const ParentPortal: React.FC<ParentPortalProps> = ({
   const handleGoogleLink = (forceConsent = false) => {
       initGoogleClient((response) => {
           if(response && response.access_token) {
+              // VERIFY SCOPES
+              // If we triggered a forced consent flow to fix photos, we MUST ensure the user actually checked the box.
+              if (forceConsent) {
+                  const grantedScopes = response.scope || "";
+                  const hasPhotosScope = grantedScopes.includes("photoslibrary.readonly");
+                  
+                  if (!hasPhotosScope) {
+                      alert("⚠️ ACTION REQUIRED\n\nYou did not grant access to Google Photos. Please click 'Grant Photos Access' again and make sure to CHECK the box next to 'Google Photos' in the popup window.");
+                      return; // Stop. Do not save this token.
+                  }
+              }
+
               onSetGoogleToken(response.access_token);
               setCalError(null);
               setPhotoError(null);
