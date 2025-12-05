@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { User, Chore, Reward, UserRole, AppState, Meal, MealType } from './types';
+import { User, Chore, Reward, UserRole, AppState, Meal, MealType, ChoreAssignment } from './types';
 import { INITIAL_USERS, INITIAL_CHORES, INITIAL_REWARDS, INITIAL_EVENTS, INITIAL_MEALS, INITIAL_PHOTOS } from './constants';
 import AuthScreen from './components/AuthScreen';
 import ParentPortal from './components/ParentPortal';
@@ -25,14 +25,34 @@ const App: React.FC = () => {
           ? parsed.users 
           : INITIAL_USERS;
         
+        // MIGRATION: Fix old chores that might be missing the new fields
+        const safeChores = (Array.isArray(parsed.chores) ? parsed.chores : INITIAL_CHORES).map((c: any) => {
+           // If 'assignments' array is missing, try to migrate from old 'assignedTo' field
+           if (!c.assignments || !Array.isArray(c.assignments)) {
+             const assignments: ChoreAssignment[] = [];
+             if (c.assignedTo) {
+               assignments.push({ userId: c.assignedTo, points: c.points || 0 });
+             }
+             return {
+               ...c,
+               assignments,
+               frequency: c.frequency || 'daily',
+               frequencyConfig: c.frequencyConfig || 'all',
+               timeOfDay: c.timeOfDay || 'all_day',
+               completedBy: Array.isArray(c.completedBy) ? c.completedBy : (c.completed ? (c.assignedTo ? [c.assignedTo] : []) : []),
+               icon: c.icon || '<svg></svg>'
+             } as Chore;
+           }
+           return c as Chore;
+        });
+        
         return {
           familyName: 'My Family',
           currentUser: null,
           ...parsed, // Override defaults with saved data
           users: safeUsers,
-          // Ensure arrays are initialized even if missing in old localstorage data
           events: Array.isArray(parsed.events) ? parsed.events : INITIAL_EVENTS,
-          chores: Array.isArray(parsed.chores) ? parsed.chores : INITIAL_CHORES,
+          chores: safeChores,
           meals: Array.isArray(parsed.meals) ? parsed.meals : INITIAL_MEALS,
           rewards: Array.isArray(parsed.rewards) ? parsed.rewards : INITIAL_REWARDS,
           photos: Array.isArray(parsed.photos) ? parsed.photos : INITIAL_PHOTOS,
