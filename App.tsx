@@ -6,11 +6,12 @@ import AuthScreen from './components/AuthScreen';
 import ParentPortal from './components/ParentPortal';
 import KidDashboard from './components/KidDashboard';
 import FamilyWallDashboard from './components/FamilyWallDashboard';
-import SetupScreen from './components/SetupScreen'; // Import SetupScreen
+import SetupScreen from './components/SetupScreen';
+import AdminPortal from './components/AdminPortal'; // Import new portal
 import { LogOut } from 'lucide-react';
 import { fetchGoogleCalendarEvents, fetchPhotosFromAlbum } from './services/googleService';
 
-type ViewState = 'WALL' | 'AUTH' | 'USER_SESSION' | 'SETUP';
+type ViewState = 'WALL' | 'AUTH' | 'USER_SESSION' | 'SETUP' | 'ADMIN';
 
 const STORAGE_KEY = 'familySyncData';
 const IDLE_TIMEOUT_MS = 300000; // 5 Minutes
@@ -30,7 +31,6 @@ const App: React.FC = () => {
           : INITIAL_USERS;
         
         // DAILY RESET LOGIC
-        // Check if the last reset date is different from today
         let currentChores = Array.isArray(parsed.chores) ? parsed.chores : INITIAL_CHORES;
         let lastReset = parsed.lastResetDate;
 
@@ -43,7 +43,7 @@ const App: React.FC = () => {
             lastReset = today;
         }
 
-        // MIGRATION: Fix old chores that might be missing the new fields
+        // MIGRATION Logic (Safe Chores)
         const safeChores = currentChores.map((c: any) => {
            if (!c.assignments || !Array.isArray(c.assignments)) {
              const assignments: ChoreAssignment[] = [];
@@ -66,7 +66,7 @@ const App: React.FC = () => {
         return {
           familyName: 'My Family',
           currentUser: null,
-          ...parsed, // Override defaults with saved data
+          ...parsed,
           users: safeUsers,
           events: Array.isArray(parsed.events) ? parsed.events : INITIAL_EVENTS,
           chores: safeChores,
@@ -114,9 +114,8 @@ const App: React.FC = () => {
   const resetIdleTimer = useCallback(() => {
     if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
     
-    // Only run idle logic if we aren't already in slideshow mode or auth mode or setup
-    // And if we have photos to show
-    if (view !== 'AUTH' && view !== 'SETUP' && state.photos.length > 0) {
+    // Only run idle logic if we aren't already in slideshow mode or auth mode or setup or admin
+    if (view !== 'AUTH' && view !== 'SETUP' && view !== 'ADMIN' && state.photos.length > 0) {
         idleTimerRef.current = setTimeout(() => {
             setView('WALL');
             setWallActiveTab('photos');
@@ -129,18 +128,13 @@ const App: React.FC = () => {
       const events = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart'];
       const handleActivity = () => {
           resetIdleTimer();
-          // If user interacts, reset active tab override so they can navigate normally
-          // Only clear if we were forced into photos mode by idle
           if (wallActiveTab === 'photos') {
-             // We don't unset immediately to avoid jarring transitions, 
-             // but user clicking nav buttons inside WallDashboard will handle state there.
-             // We just set this prop to undefined to let component manage itself again.
              setWallActiveTab(undefined); 
           }
       };
 
       events.forEach(e => window.addEventListener(e, handleActivity));
-      resetIdleTimer(); // Start timer
+      resetIdleTimer();
 
       return () => {
           events.forEach(e => window.removeEventListener(e, handleActivity));
@@ -148,8 +142,7 @@ const App: React.FC = () => {
       };
   }, [resetIdleTimer, wallActiveTab]);
 
-
-  // Save to LocalStorage whenever state changes
+  // Save to LocalStorage
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
@@ -158,29 +151,25 @@ const App: React.FC = () => {
     }
   }, [state]);
 
-  // Sync Logic - Fetch external data
+  // Sync Logic
   useEffect(() => {
       const syncData = async () => {
-          // 1. Fetch Calendar Events
           let allEvents: CalendarEvent[] = [];
           
           if (state.calendarSources.length > 0) {
               for (const source of state.calendarSources) {
                   const prefix = source.type === 'personal' ? `[${source.ownerName}]` : '';
-                  // Use source token if available, fallback to main token
                   const token = source.accessToken || state.googleAccessToken;
                   if (token) {
                     const fetched = await fetchGoogleCalendarEvents(token, source.googleCalendarId, source.color, prefix);
                     allEvents = [...allEvents, ...fetched];
                   }
               }
-              // Update state with new events if we got any (avoids wiping local state on network fail)
               if (allEvents.length > 0) {
                   setState(prev => ({ ...prev, events: allEvents }));
               }
           }
 
-          // 2. Fetch Photos
           const photoToken = state.photoConfig.accessToken || state.googleAccessToken;
           if (photoToken && state.photoConfig.albumId) {
               const fetchedPhotos = await fetchPhotosFromAlbum(photoToken, state.photoConfig.albumId);
@@ -190,12 +179,9 @@ const App: React.FC = () => {
           }
       };
 
-      // Initial Sync
       if (state.googleAccessToken) {
         syncData();
       }
-      
-      // Poll every 15 minutes
       const interval = setInterval(syncData, 15 * 60 * 1000);
       return () => clearInterval(interval);
   }, [state.calendarSources, state.photoConfig, state.googleAccessToken]);
@@ -203,7 +189,7 @@ const App: React.FC = () => {
 
   const handleLogin = (user: User) => {
     setState(prev => ({ ...prev, currentUser: user }));
-    setView('USER_SESSION'); // Go straight to session after login
+    setView('USER_SESSION');
   };
 
   const handleLogout = () => {
@@ -214,12 +200,36 @@ const App: React.FC = () => {
   const handleOpenAuth = () => {
     setView('AUTH');
   };
+  
+  const handleOpenAdmin = () => {
+    setView('ADMIN');
+  };
 
   const handleCloseAuth = () => {
     setView('WALL');
   };
   
-  // New Setup Handler
+  const handleWipeData = () => {
+      localStorage.removeItem(STORAGE_KEY);
+      // Reset state in memory effectively
+      setState({
+          familyName: 'My Family',
+          users: INITIAL_USERS,
+          chores: INITIAL_CHORES,
+          choreHistory: INITIAL_CHORE_LOGS,
+          rewards: INITIAL_REWARDS,
+          events: INITIAL_EVENTS,
+          meals: INITIAL_MEALS,
+          photos: INITIAL_PHOTOS,
+          currentUser: null,
+          calendarSources: INITIAL_CALENDAR_SOURCES,
+          photoConfig: INITIAL_PHOTO_CONFIG,
+          lastResetDate: new Date().toISOString().split('T')[0]
+      });
+      setView('SETUP');
+  };
+
+  // ... (Existing Action Handlers: handleSetupComplete, handleSetPin, etc.)
   const handleSetupComplete = (googleProfile: any, token: string) => {
      const newAdminUser: User = {
          id: `u-${Date.now()}`,
@@ -239,93 +249,37 @@ const App: React.FC = () => {
          familyName: googleProfile.family_name ? `${googleProfile.family_name} Family` : 'My Family'
      }));
      
-     setView('USER_SESSION'); // Take them directly to dashboard to configure kids
+     setView('USER_SESSION'); 
   };
 
   const handleSetPin = (userId: string, pin: string) => {
-    setState(prev => ({
-      ...prev,
-      users: prev.users.map(u => u.id === userId ? { ...u, pin } : u)
-    }));
+    setState(prev => ({ ...prev, users: prev.users.map(u => u.id === userId ? { ...u, pin } : u) }));
   };
-
-  const handleAddReward = (reward: Reward) => {
-     setState(prev => ({
-       ...prev,
-       rewards: [...prev.rewards, reward]
-     }));
-  };
-
-  const handleUpdateReward = (updatedReward: Reward) => {
-      setState(prev => ({
-          ...prev,
-          rewards: prev.rewards.map(r => r.id === updatedReward.id ? updatedReward : r)
-      }));
-  };
-
-  const handleDeleteReward = (id: string) => {
-    setState(prev => ({
-      ...prev,
-      rewards: prev.rewards.filter(r => r.id !== id)
-    }));
-  };
-
-  const handleAddCalendarSource = (source: CalendarSource) => {
-      setState(prev => ({
-          ...prev,
-          calendarSources: [...prev.calendarSources, source]
-      }));
-  };
-
-  const handleRemoveCalendarSource = (id: string) => {
-      setState(prev => ({
-          ...prev,
-          calendarSources: prev.calendarSources.filter(s => s.id !== id)
-      }));
-  };
-
-  const handleSetPhotoConfig = (config: PhotoConfig) => {
-      setState(prev => ({ ...prev, photoConfig: config }));
-  };
-
-  const handleSetGoogleToken = (token: string) => {
-      setState(prev => ({ ...prev, googleAccessToken: token }));
-  };
-
-  // Shared Reward Redemption Logic
+  const handleAddReward = (reward: Reward) => { setState(prev => ({ ...prev, rewards: [...prev.rewards, reward] })); };
+  const handleUpdateReward = (updatedReward: Reward) => { setState(prev => ({ ...prev, rewards: prev.rewards.map(r => r.id === updatedReward.id ? updatedReward : r) })); };
+  const handleDeleteReward = (id: string) => { setState(prev => ({ ...prev, rewards: prev.rewards.filter(r => r.id !== id) })); };
+  const handleAddCalendarSource = (source: CalendarSource) => { setState(prev => ({ ...prev, calendarSources: [...prev.calendarSources, source] })); };
+  const handleRemoveCalendarSource = (id: string) => { setState(prev => ({ ...prev, calendarSources: prev.calendarSources.filter(s => s.id !== id) })); };
+  const handleSetPhotoConfig = (config: PhotoConfig) => { setState(prev => ({ ...prev, photoConfig: config })); };
+  const handleSetGoogleToken = (token: string) => { setState(prev => ({ ...prev, googleAccessToken: token })); };
+  
   const handleRedeemSharedReward = (rewardId: string) => {
       const reward = state.rewards.find(r => r.id === rewardId);
       if (!reward || !reward.isShared) return;
-
       const kids = state.users.filter(u => u.role === UserRole.KID);
-      if (kids.length === 0) {
-          alert("No kids to redeem for!");
-          return;
-      }
-
+      if (kids.length === 0) return;
       const costPerKid = Math.ceil(reward.cost / kids.length);
-      
-      // Check if all kids can afford it
       const poorKids = kids.filter(k => k.points < costPerKid);
-      
       if (poorKids.length > 0) {
-          alert(`Cannot redeem yet! ${poorKids.map(k => k.name).join(', ')} need(s) more points. Cost is ${costPerKid} per kid.`);
+          alert(`Cannot redeem yet! ${poorKids.map(k => k.name).join(', ')} need(s) more points.`);
           return;
       }
-
-      // Deduct points
       const updatedUsers = state.users.map(u => {
-          if (u.role === UserRole.KID) {
-              return { ...u, points: u.points - costPerKid };
-          }
+          if (u.role === UserRole.KID) return { ...u, points: u.points - costPerKid };
           return u;
       });
-
       setState(prev => ({ ...prev, users: updatedUsers }));
-      alert(`Success! Redeemed ${reward.title}. Deducted ${costPerKid} points from each kid.`);
   };
-
-  // --- Actions (Existing) ---
 
   const handleToggleChore = (choreId: string, asUserId?: string) => {
     setState(prev => {
@@ -352,218 +306,62 @@ const App: React.FC = () => {
       const updatedChores = prev.chores.map(c => {
         if (c.id === choreId) {
             let newCompletedBy = [...c.completedBy];
-            if (alreadyCompleted) {
-                newCompletedBy = newCompletedBy.filter(id => id !== targetUserId);
-            } else {
-                newCompletedBy.push(targetUserId);
-            }
+            if (alreadyCompleted) newCompletedBy = newCompletedBy.filter(id => id !== targetUserId);
+            else newCompletedBy.push(targetUserId);
             return { ...c, completedBy: newCompletedBy };
         }
         return c;
       });
       let updatedHistory = [...(prev.choreHistory || [])];
       if (!alreadyCompleted) {
-         const newLog: ChoreLog = {
-             id: `log-${Date.now()}`,
-             choreId: chore.id,
-             choreTitle: chore.title,
-             userId: targetUserId,
-             userName: targetUser.name,
-             points: assignment.points,
-             date: todayDate,
-             timestamp: new Date().toISOString()
-         };
-         updatedHistory.push(newLog);
+         updatedHistory.push({ id: `log-${Date.now()}`, choreId: chore.id, choreTitle: chore.title, userId: targetUserId, userName: targetUser.name, points: assignment.points, date: todayDate, timestamp: new Date().toISOString() });
       } else {
          const logIndex = updatedHistory.findIndex(l => l.choreId === choreId && l.userId === targetUserId && l.date === todayDate);
-         if (logIndex > -1) {
-             updatedHistory.splice(logIndex, 1);
-         }
+         if (logIndex > -1) updatedHistory.splice(logIndex, 1);
       }
-      const updatedCurrentUser = prev.currentUser?.id === targetUserId ? updatedUsers.find(u => u.id === targetUserId) || prev.currentUser : prev.currentUser;
-      return {
-        ...prev,
-        users: updatedUsers,
-        chores: updatedChores,
-        choreHistory: updatedHistory,
-        currentUser: updatedCurrentUser
-      };
+      return { ...prev, users: updatedUsers, chores: updatedChores, choreHistory: updatedHistory, currentUser: prev.currentUser?.id === targetUserId ? updatedUsers.find(u => u.id === targetUserId) || prev.currentUser : prev.currentUser };
     });
   };
 
-  const handleAddChore = (newChore: Omit<Chore, 'id'>) => {
-     setState(prev => ({
-        ...prev,
-        chores: [...prev.chores, { ...newChore, id: `c${Date.now()}` }]
-     }));
-  };
-
-  const handleUpdateChore = (updatedChore: Chore) => {
-    setState(prev => ({
-      ...prev,
-      chores: prev.chores.map(c => c.id === updatedChore.id ? updatedChore : c)
-    }));
-  };
-
-  const handleDeleteChore = (id: string) => {
-    setState(prev => ({
-      ...prev,
-      chores: prev.chores.filter(c => c.id !== id)
-    }));
-  };
-
+  const handleAddChore = (newChore: Omit<Chore, 'id'>) => { setState(prev => ({ ...prev, chores: [...prev.chores, { ...newChore, id: `c${Date.now()}` }] })); };
+  const handleUpdateChore = (updatedChore: Chore) => { setState(prev => ({ ...prev, chores: prev.chores.map(c => c.id === updatedChore.id ? updatedChore : c) })); };
+  const handleDeleteChore = (id: string) => { setState(prev => ({ ...prev, chores: prev.chores.filter(c => c.id !== id) })); };
   const handleRequestReward = (title: string, cost: number) => {
      if(!state.currentUser) return;
-     const newReward: Reward = {
-       id: `r${Date.now()}`,
-       title,
-       cost,
-       requestedBy: state.currentUser.id,
-       approved: false,
-       image: `https://ui-avatars.com/api/?name=${encodeURIComponent(title)}&background=random`
-     };
+     const newReward: Reward = { id: `r${Date.now()}`, title, cost, requestedBy: state.currentUser.id, approved: false, image: `https://ui-avatars.com/api/?name=${encodeURIComponent(title)}&background=random` };
      setState(prev => ({ ...prev, rewards: [...prev.rewards, newReward] }));
   };
+  const handleApproveReward = (id: string, adjustedCost?: number) => { setState(prev => ({ ...prev, rewards: prev.rewards.map(r => r.id === id ? { ...r, approved: true, cost: adjustedCost !== undefined ? adjustedCost : r.cost } : r) })); };
+  const handleUpdateMeal = (date: string, type: MealType, title: string) => { setState(prev => { const existingMealIndex = prev.meals.findIndex(m => m.date === date && m.type === type); const newMeals = [...prev.meals]; if (existingMealIndex >= 0) newMeals[existingMealIndex] = { ...newMeals[existingMealIndex], title }; else newMeals.push({ id: `m-${Date.now()}`, date, type, title }); return { ...prev, meals: newMeals }; }); };
+  const handleUpdateFamilyName = (name: string) => { setState(prev => ({ ...prev, familyName: name })); };
+  const handleAddUser = (name: string, role: UserRole) => { const newUser: User = { id: `u${Date.now()}`, name, role, avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random`, points: 0, totalPointsEarned: 0, email: role === UserRole.PARENT ? 'newparent@example.com' : undefined }; setState(prev => ({ ...prev, users: [...prev.users, newUser] })); };
+  const handleDeleteUser = (id: string) => { if (state.users.length <= 1) { alert("You cannot delete the last user."); return; } setState(prev => ({ ...prev, users: prev.users.filter(u => u.id !== id), chores: prev.chores.filter(c => c.assignments.length > 1 || c.assignments[0].userId !== id).map(c => ({ ...c, assignments: c.assignments.filter(a => a.userId !== id) })) })); };
 
-  const handleApproveReward = (id: string, adjustedCost?: number) => {
-    setState(prev => ({
-      ...prev,
-      rewards: prev.rewards.map(r => 
-          r.id === id 
-            ? { ...r, approved: true, cost: adjustedCost !== undefined ? adjustedCost : r.cost } 
-            : r
-      )
-    }));
-  };
-
-  const handleUpdateMeal = (date: string, type: MealType, title: string) => {
-    setState(prev => {
-      const existingMealIndex = prev.meals.findIndex(m => m.date === date && m.type === type);
-      const newMeals = [...prev.meals];
-      if (existingMealIndex >= 0) {
-        newMeals[existingMealIndex] = { ...newMeals[existingMealIndex], title };
-      } else {
-        newMeals.push({ id: `m-${Date.now()}`, date, type, title });
-      }
-      return { ...prev, meals: newMeals };
-    });
-  };
-
-  const handleUpdateFamilyName = (name: string) => {
-    setState(prev => ({ ...prev, familyName: name }));
-  };
-
-  const handleAddUser = (name: string, role: UserRole) => {
-    const newUser: User = {
-      id: `u${Date.now()}`,
-      name,
-      role,
-      avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random`,
-      points: 0,
-      totalPointsEarned: 0,
-      email: role === UserRole.PARENT ? 'newparent@example.com' : undefined // Placeholder
-    };
-    setState(prev => ({ ...prev, users: [...prev.users, newUser] }));
-  };
-
-  const handleDeleteUser = (id: string) => {
-    if (state.users.length <= 1) {
-      alert("You cannot delete the last user.");
-      return;
-    }
-    setState(prev => ({
-      ...prev,
-      users: prev.users.filter(u => u.id !== id),
-      chores: prev.chores.filter(c => c.assignments.length > 1 || c.assignments[0].userId !== id).map(c => ({
-          ...c,
-          assignments: c.assignments.filter(a => a.userId !== id)
-      }))
-    }));
-  };
-
-  // --- Render ---
-  
-  if (view === 'SETUP') {
-      return <SetupScreen onSetupComplete={handleSetupComplete} />;
-  }
+  if (view === 'SETUP') return <SetupScreen onSetupComplete={handleSetupComplete} />;
 
   if (view === 'AUTH') {
-    return (
-      <AuthScreen 
-        users={state.users} 
-        onLogin={handleLogin}
-        onCancel={handleCloseAuth}
-        onSetPin={handleSetPin}
-      />
-    );
+    return <AuthScreen users={state.users} onLogin={handleLogin} onCancel={handleCloseAuth} onSetPin={handleSetPin} onAdminLogin={handleOpenAdmin} />;
+  }
+
+  if (view === 'ADMIN') {
+      return <AdminPortal state={state} onClose={handleCloseAuth} onWipeData={handleWipeData} />;
   }
 
   if (view === 'WALL') {
-    return (
-      <FamilyWallDashboard 
-        familyName={state.familyName}
-        users={state.users}
-        events={state.events || []}
-        chores={state.chores || []}
-        meals={state.meals || []}
-        photos={state.photos || []}
-        onSettingsClick={handleOpenAuth} // Opens the "Who is here" screen
-        onToggleChore={handleToggleChore}
-        onUpdateMeal={handleUpdateMeal}
-        currentUser={state.currentUser} // Likely null in wall mode, but passed if active
-        onLogout={handleLogout}
-        activeTabOverride={wallActiveTab}
-      />
-    );
+    return <FamilyWallDashboard familyName={state.familyName} users={state.users} events={state.events || []} chores={state.chores || []} meals={state.meals || []} photos={state.photos || []} onSettingsClick={handleOpenAuth} onToggleChore={handleToggleChore} onUpdateMeal={handleUpdateMeal} currentUser={state.currentUser} onLogout={handleLogout} activeTabOverride={wallActiveTab} />;
   }
 
   if (view === 'USER_SESSION' && state.currentUser) {
     return (
       <div className="h-screen w-full relative">
-         <button 
-          onClick={() => setView('WALL')}
-          className="fixed top-4 right-4 z-50 bg-white/80 p-2 rounded-full shadow-sm hover:bg-slate-200 backdrop-blur-sm border border-slate-200"
-          title="Back to Wall"
-         >
-           <LogOut size={20} className="text-slate-600" />
-         </button>
-  
+         <button onClick={() => setView('WALL')} className="fixed top-4 right-4 z-50 bg-white/80 p-2 rounded-full shadow-sm hover:bg-slate-200 backdrop-blur-sm border border-slate-200" title="Back to Wall"><LogOut size={20} className="text-slate-600" /></button>
          {state.currentUser.role === UserRole.PARENT ? (
            <ParentPortal 
-              familyName={state.familyName}
-              users={state.users}
-              chores={state.chores}
-              rewards={state.rewards}
-              choreHistory={state.choreHistory}
-              calendarSources={state.calendarSources}
-              photoConfig={state.photoConfig}
-              currentUser={state.currentUser}
-              googleAccessToken={state.googleAccessToken}
-              onAddChore={handleAddChore}
-              onUpdateChore={handleUpdateChore}
-              onDeleteChore={handleDeleteChore}
-              onApproveReward={handleApproveReward}
-              onUpdateFamilyName={handleUpdateFamilyName}
-              onAddUser={handleAddUser}
-              onDeleteUser={handleDeleteUser}
-              onAddReward={handleAddReward}
-              onUpdateReward={handleUpdateReward}
-              onDeleteReward={handleDeleteReward}
-              onRedeemSharedReward={handleRedeemSharedReward}
-              onAddCalendarSource={handleAddCalendarSource}
-              onRemoveCalendarSource={handleRemoveCalendarSource}
-              onSetPhotoConfig={handleSetPhotoConfig}
-              onSetGoogleToken={handleSetGoogleToken}
+              familyName={state.familyName} users={state.users} chores={state.chores} rewards={state.rewards} choreHistory={state.choreHistory} calendarSources={state.calendarSources} photoConfig={state.photoConfig} currentUser={state.currentUser} googleAccessToken={state.googleAccessToken}
+              onAddChore={handleAddChore} onUpdateChore={handleUpdateChore} onDeleteChore={handleDeleteChore} onApproveReward={handleApproveReward} onUpdateFamilyName={handleUpdateFamilyName} onAddUser={handleAddUser} onDeleteUser={handleDeleteUser} onAddReward={handleAddReward} onUpdateReward={handleUpdateReward} onDeleteReward={handleDeleteReward} onRedeemSharedReward={handleRedeemSharedReward} onAddCalendarSource={handleAddCalendarSource} onRemoveCalendarSource={handleRemoveCalendarSource} onSetPhotoConfig={handleSetPhotoConfig} onSetGoogleToken={handleSetGoogleToken}
            />
          ) : (
-           <KidDashboard 
-              currentUser={state.currentUser}
-              chores={state.chores}
-              rewards={state.rewards}
-              onToggleChore={handleToggleChore}
-              onRequestReward={handleRequestReward}
-              onAddCalendarSource={handleAddCalendarSource}
-           />
+           <KidDashboard currentUser={state.currentUser} chores={state.chores} rewards={state.rewards} onToggleChore={handleToggleChore} onRequestReward={handleRequestReward} onAddCalendarSource={handleAddCalendarSource} />
          )}
       </div>
     );

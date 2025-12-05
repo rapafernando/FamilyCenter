@@ -7,4 +7,5 @@ export const GOOGLE_CLIENT_ID = "576992919448-164tl06bhj97e8o0l1f6jsn6p1hnsrc9.a
 // 'profile': To get the user's name and avatar
 // 'calendar.readonly': To read events
 // 'photoslibrary.readonly': To read albums and photos
-export const GOOGLE_SCOPES = "https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/calendar.events.readonly https://www.googleapis.com/auth/photoslibrary.readonly profile email";
+// 'openid': Standard authentication
+export const GOOGLE_SCOPES = "openid profile email https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/calendar.events.readonly https://www.googleapis.com/auth/photoslibrary.readonly";
