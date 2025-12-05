@@ -276,6 +276,15 @@ const ParentPortal: React.FC<ParentPortalProps> = ({
   const handleGoogleLink = (forceConsent = false) => {
       initGoogleClient((response) => {
           if(response && response.access_token) {
+              // --- SCOPE VALIDATION ---
+              const grantedScopes = response.scope || '';
+              const requiredPhotoScope = 'photoslibrary.readonly';
+              
+              if (!grantedScopes.includes(requiredPhotoScope)) {
+                  alert("⚠️ Missing Photos Permission\n\nPlease verify that you checked the 'Google Photos' box in the consent screen. Without this permission, we cannot access your albums.");
+                  // We still set the token because Calendar might work, but we warn the user.
+              }
+
               onSetGoogleToken(response.access_token);
               // Clear errors
               setCalError(null);
