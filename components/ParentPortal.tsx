@@ -2,7 +2,7 @@
 // ... imports remain the same
 import React, { useState, useEffect } from 'react';
 import { User, Chore, Reward, UserRole, TimeOfDay, ChoreFrequency, ChoreLog, CalendarSource, PhotoConfig } from '../types';
-import { Calendar as CalIcon, CheckSquare, Settings, Plus, Trash2, UserPlus, Save, Clock, Repeat, MoreVertical, Edit, Copy, BarChart2, TrendingUp, History, Gift, Users, Link, Image as ImageIcon, RefreshCw, CheckCircle2, Loader2 } from 'lucide-react';
+import { Calendar as CalIcon, CheckSquare, Settings, Plus, Trash2, UserPlus, Save, Clock, Repeat, MoreVertical, Edit, Copy, BarChart2, TrendingUp, History, Gift, Users, Link, Image as ImageIcon, RefreshCw, CheckCircle2, Loader2, AlertTriangle, LogOut } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line } from 'recharts';
 import { initGoogleClient, signInWithGoogle, fetchCalendarList, fetchAlbums } from '../services/googleService';
 
@@ -96,6 +96,10 @@ const ParentPortal: React.FC<ParentPortalProps> = ({
   const [fetchedCalendars, setFetchedCalendars] = useState<any[]>([]);
   const [fetchedAlbums, setFetchedAlbums] = useState<any[]>([]);
   
+  // Error States
+  const [calError, setCalError] = useState<string | null>(null);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+
   // Loading States for Refresh
   const [refreshingCal, setRefreshingCal] = useState(false);
   const [refreshingPhotos, setRefreshingPhotos] = useState(false);
@@ -114,8 +118,8 @@ const ParentPortal: React.FC<ParentPortalProps> = ({
   // Fetch data on load if token exists
   useEffect(() => {
       if (googleAccessToken) {
-          fetchCalendarList(googleAccessToken).then(setFetchedCalendars);
-          fetchAlbums(googleAccessToken).then(setFetchedAlbums);
+          handleRefreshCalendars();
+          handleRefreshAlbums();
       }
   }, [googleAccessToken]);
 
@@ -269,26 +273,32 @@ const ParentPortal: React.FC<ParentPortalProps> = ({
   };
 
   // Integration Handlers
-  const handleGoogleLink = () => {
+  const handleGoogleLink = (forceConsent = false) => {
       initGoogleClient((response) => {
           if(response && response.access_token) {
               onSetGoogleToken(response.access_token);
+              // Clear errors
+              setCalError(null);
+              setPhotoError(null);
               // Fetch Lists immediately
-              fetchCalendarList(response.access_token).then(setFetchedCalendars);
-              fetchAlbums(response.access_token).then(setFetchedAlbums);
+              fetchCalendarList(response.access_token).then(setFetchedCalendars).catch(e => setCalError(e.message));
+              fetchAlbums(response.access_token).then(setFetchedAlbums).catch(e => setPhotoError(e.message));
           }
       });
-      signInWithGoogle();
+      // If forceConsent is true, we force the prompt to ensure we get a fresh token with all scopes
+      signInWithGoogle(forceConsent ? { prompt: 'consent' } : undefined);
   };
 
   const handleRefreshCalendars = async () => {
       if (!googleAccessToken) return;
       setRefreshingCal(true);
+      setCalError(null);
       try {
           const cals = await fetchCalendarList(googleAccessToken);
           setFetchedCalendars(cals);
-      } catch (e) {
+      } catch (e: any) {
           console.error(e);
+          setCalError(e.message || "Failed to load calendars");
       }
       setRefreshingCal(false);
   };
@@ -296,11 +306,13 @@ const ParentPortal: React.FC<ParentPortalProps> = ({
   const handleRefreshAlbums = async () => {
       if (!googleAccessToken) return;
       setRefreshingPhotos(true);
+      setPhotoError(null);
       try {
           const albums = await fetchAlbums(googleAccessToken);
           setFetchedAlbums(albums);
-      } catch (e) {
+      } catch (e: any) {
           console.error(e);
+          setPhotoError(e.message || "Failed to load albums");
       }
       setRefreshingPhotos(false);
   };
@@ -611,7 +623,7 @@ const ParentPortal: React.FC<ParentPortalProps> = ({
                         <p className="text-slate-500 mt-1">Manage your connected Google Account services.</p>
                      </div>
                      {!isGoogleLinked ? (
-                         <button onClick={handleGoogleLink} className="bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 px-4 py-2 rounded-xl font-bold flex items-center gap-2 transition-all shadow-sm">
+                         <button onClick={() => handleGoogleLink(false)} className="bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 px-4 py-2 rounded-xl font-bold flex items-center gap-2 transition-all shadow-sm">
                              <svg className="w-5 h-5" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
                              Link Google Account
                          </button>
@@ -631,14 +643,24 @@ const ParentPortal: React.FC<ParentPortalProps> = ({
                                     <h4 className="font-bold text-lg text-slate-800 flex items-center gap-2"><CalIcon size={20} className="text-blue-500"/> Calendar Sync</h4>
                                     <p className="text-sm text-slate-500">Choose calendars to display.</p>
                                 </div>
-                                <button 
-                                    onClick={handleRefreshCalendars} 
-                                    disabled={refreshingCal}
-                                    className="text-slate-400 hover:text-blue-600 disabled:opacity-50 transition-colors p-2 rounded-full hover:bg-slate-50"
-                                    title="Refresh Calendars"
-                                >
-                                    {refreshingCal ? <Loader2 size={20} className="animate-spin text-blue-500"/> : <RefreshCw size={20}/>}
-                                </button>
+                                <div className="flex gap-2">
+                                    {calError && (
+                                        <button 
+                                            onClick={() => handleGoogleLink(true)} 
+                                            className="text-orange-500 hover:text-orange-600 bg-orange-50 px-3 py-1.5 rounded-lg text-xs font-bold"
+                                        >
+                                            Re-Connect
+                                        </button>
+                                    )}
+                                    <button 
+                                        onClick={handleRefreshCalendars} 
+                                        disabled={refreshingCal}
+                                        className="text-slate-400 hover:text-blue-600 disabled:opacity-50 transition-colors p-2 rounded-full hover:bg-slate-50"
+                                        title="Refresh Calendars"
+                                    >
+                                        {refreshingCal ? <Loader2 size={20} className="animate-spin text-blue-500"/> : <RefreshCw size={20}/>}
+                                    </button>
+                                </div>
                              </div>
                              
                              <div className="bg-slate-50 p-4 rounded-xl space-y-3 mb-6">
@@ -665,6 +687,16 @@ const ParentPortal: React.FC<ParentPortalProps> = ({
                                       </div>
                                  </div>
                                  
+                                 {calError && (
+                                     <div className="p-3 bg-red-50 text-red-600 rounded-lg text-sm mb-2 flex items-start gap-2">
+                                         <AlertTriangle size={16} className="mt-0.5 flex-shrink-0"/>
+                                         <div>
+                                            <p className="font-bold">Error loading calendars</p>
+                                            <p className="text-xs opacity-80">{calError}</p>
+                                         </div>
+                                     </div>
+                                 )}
+                                 
                                  {fetchedCalendars.length > 0 ? (
                                      <div className="grid grid-cols-1 gap-2 max-h-60 overflow-y-auto pr-1">
                                          {fetchedCalendars.map(cal => {
@@ -686,7 +718,7 @@ const ParentPortal: React.FC<ParentPortalProps> = ({
                                      </div>
                                  ) : (
                                      <div className="text-center py-4 text-slate-400 text-sm italic">
-                                         {refreshingCal ? 'Loading calendars...' : 'No calendars found.'}
+                                         {refreshingCal ? 'Loading calendars...' : (!calError && 'No calendars found.')}
                                      </div>
                                  )}
                              </div>
@@ -717,16 +749,36 @@ const ParentPortal: React.FC<ParentPortalProps> = ({
                                     <h4 className="font-bold text-lg text-slate-800 flex items-center gap-2"><ImageIcon size={20} className="text-purple-500"/> Photo Frame</h4>
                                     <p className="text-sm text-slate-500">Select an album for the idle screensaver.</p>
                                 </div>
-                                <button 
-                                    onClick={handleRefreshAlbums} 
-                                    disabled={refreshingPhotos}
-                                    className="text-slate-400 hover:text-purple-600 disabled:opacity-50 transition-colors p-2 rounded-full hover:bg-slate-50"
-                                    title="Refresh Albums"
-                                >
-                                    {refreshingPhotos ? <Loader2 size={20} className="animate-spin text-purple-500"/> : <RefreshCw size={20}/>}
-                                </button>
+                                <div className="flex gap-2">
+                                    {photoError && (
+                                        <button 
+                                            onClick={() => handleGoogleLink(true)} 
+                                            className="text-orange-500 hover:text-orange-600 bg-orange-50 px-3 py-1.5 rounded-lg text-xs font-bold"
+                                        >
+                                            Re-Connect
+                                        </button>
+                                    )}
+                                    <button 
+                                        onClick={handleRefreshAlbums} 
+                                        disabled={refreshingPhotos}
+                                        className="text-slate-400 hover:text-purple-600 disabled:opacity-50 transition-colors p-2 rounded-full hover:bg-slate-50"
+                                        title="Refresh Albums"
+                                    >
+                                        {refreshingPhotos ? <Loader2 size={20} className="animate-spin text-purple-500"/> : <RefreshCw size={20}/>}
+                                    </button>
+                                </div>
                              </div>
                              
+                             {photoError && (
+                                 <div className="p-3 bg-red-50 text-red-600 rounded-lg text-sm mb-4 flex items-start gap-2">
+                                     <AlertTriangle size={16} className="mt-0.5 flex-shrink-0"/>
+                                     <div>
+                                        <p className="font-bold">Error loading albums</p>
+                                        <p className="text-xs opacity-80">{photoError}</p>
+                                     </div>
+                                 </div>
+                             )}
+
                              {fetchedAlbums.length > 0 ? (
                                  <div className="grid grid-cols-1 gap-3 max-h-96 overflow-y-auto p-1">
                                      {fetchedAlbums.map(album => (
@@ -750,7 +802,7 @@ const ParentPortal: React.FC<ParentPortalProps> = ({
                                  </div>
                              ) : (
                                  <div className="text-center py-8 text-slate-400 text-sm italic bg-slate-50 rounded-xl border border-dashed border-slate-200">
-                                     {refreshingPhotos ? 'Loading albums...' : 'No albums found in this Google Photos account.'}
+                                     {refreshingPhotos ? 'Loading albums...' : (!photoError && 'No albums found in this Google Photos account.')}
                                  </div>
                              )}
                              

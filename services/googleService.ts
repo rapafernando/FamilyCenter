@@ -31,10 +31,16 @@ export const initGoogleClient = (callback: (response: any) => void) => {
 
 /**
  * Triggers the Google Sign-In popup flow.
+ * @param options - Optional configuration, e.g., { prompt: 'consent' } to force re-authorization
  */
-export const signInWithGoogle = () => {
+export const signInWithGoogle = (options?: { prompt?: string }) => {
   if (tokenClient) {
-    tokenClient.requestAccessToken();
+    if (options?.prompt) {
+        // Request with specific prompt (e.g. to force account selection or consent)
+        tokenClient.requestAccessToken({ prompt: options.prompt });
+    } else {
+        tokenClient.requestAccessToken();
+    }
   } else {
     console.error("Google Token Client not initialized");
     alert("Google Client not ready. Please check your internet connection or Client ID.");
@@ -49,6 +55,7 @@ export const fetchUserProfile = async (accessToken: string) => {
   const response = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
+  if (!response.ok) throw new Error('Failed to fetch user profile');
   return response.json();
 };
 
@@ -61,11 +68,17 @@ export const fetchCalendarList = async (accessToken: string) => {
       const response = await fetch('https://www.googleapis.com/calendar/v3/users/me/calendarList', {
           headers: { Authorization: `Bearer ${accessToken}` }
       });
+      
+      if (!response.ok) {
+          const err = await response.json();
+          throw new Error(err.error?.message || 'Failed to fetch calendars');
+      }
+
       const data = await response.json();
       return data.items || [];
   } catch (e) {
       console.error("Error fetching calendar list", e);
-      return [];
+      throw e;
   }
 };
 
@@ -75,14 +88,22 @@ export const fetchCalendarList = async (accessToken: string) => {
 export const fetchAlbums = async (accessToken: string) => {
     if (!accessToken) return [];
     try {
-        const response = await fetch('https://photoslibrary.googleapis.com/v1/albums', {
+        const response = await fetch('https://photoslibrary.googleapis.com/v1/albums?pageSize=50', {
             headers: { Authorization: `Bearer ${accessToken}` }
         });
+        
+        if (!response.ok) {
+            const err = await response.json();
+            throw new Error(err.error?.message || 'Failed to fetch albums');
+        }
+
         const data = await response.json();
+        // The API returns 'albums' for app-created albums and readable user albums
+        // If empty, it might be that the user has no albums or permissions issues.
         return data.albums || [];
     } catch (e) {
         console.error("Error fetching albums", e);
-        return [];
+        throw e;
     }
 };
 
@@ -103,6 +124,14 @@ export const fetchPhotosFromAlbum = async (accessToken: string, albumId: string)
                 pageSize: 50
             })
         });
+        
+        if (!response.ok) {
+             const err = await response.json();
+             console.error("Photo Fetch Error", err);
+             // Don't throw here to avoid crashing the whole dashboard view, just return empty
+             return [];
+        }
+
         const data = await response.json();
         
         if (!data.mediaItems) return [];
@@ -143,6 +172,9 @@ export const fetchGoogleCalendarEvents = async (
         headers: { Authorization: `Bearer ${accessToken}` },
       }
     );
+    
+    // We don't throw here to prevent one broken calendar from breaking all events
+    if (!response.ok) return [];
 
     const data = await response.json();
     
