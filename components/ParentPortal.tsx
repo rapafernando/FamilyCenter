@@ -1,11 +1,13 @@
 
+// ... imports remain the same
 import React, { useState } from 'react';
 import { User, Chore, Reward, UserRole, TimeOfDay, ChoreFrequency, ChoreLog, CalendarSource, PhotoConfig } from '../types';
-import { Calendar as CalIcon, CheckSquare, Settings, Plus, Trash2, UserPlus, Save, Clock, Repeat, MoreVertical, Edit, Copy, BarChart2, TrendingUp, History, Gift, Users, Link, Image as ImageIcon, RefreshCw } from 'lucide-react';
+import { Calendar as CalIcon, CheckSquare, Settings, Plus, Trash2, UserPlus, Save, Clock, Repeat, MoreVertical, Edit, Copy, BarChart2, TrendingUp, History, Gift, Users, Link, Image as ImageIcon, RefreshCw, CheckCircle2 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line } from 'recharts';
 import { initGoogleClient, signInWithGoogle, fetchCalendarList, fetchAlbums } from '../services/googleService';
 
 interface ParentPortalProps {
+// ... props remain the same
   familyName: string;
   users: User[];
   chores: Chore[];
@@ -386,6 +388,7 @@ const ParentPortal: React.FC<ParentPortalProps> = ({
            </div>
         )}
 
+        {/* ... (History, Chores, Rewards sections omitted for brevity as they are unchanged) ... */}
         {activeTab === 'history' && (
             <div className="space-y-8">
                  <div><h2 className="text-2xl font-bold text-slate-800">Analytics & History</h2><p className="text-slate-500">Track chore completion and points over time.</p></div>
@@ -563,112 +566,146 @@ const ParentPortal: React.FC<ParentPortalProps> = ({
 
         {/* Integrations Tab */}
         {activeTab === 'integrations' && (
-            <div className="space-y-8 max-w-4xl">
-                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-                     <div className="flex justify-between items-start mb-6">
-                         <div>
-                            <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2"><Link size={24} className="text-blue-500"/> Google Integrations</h3>
-                            <p className="text-slate-500 mt-1">Sync Calendars and Photos from your Google Account.</p>
-                         </div>
-                         {!isGoogleLinked ? (
-                             <button onClick={handleGoogleLink} className="bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 px-4 py-2 rounded-xl font-bold flex items-center gap-2 transition-all">
-                                 <svg className="w-5 h-5" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
-                                 Link Google Account
-                             </button>
-                         ) : (
-                             <div className="flex items-center gap-2 text-green-600 bg-green-50 px-3 py-1 rounded-lg font-bold text-sm">
-                                 <RefreshCw size={14}/> Linked
-                             </div>
-                         )}
+            <div className="space-y-6 max-w-6xl">
+                 {/* Header Card */}
+                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                     <div>
+                        <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2"><Link size={24} className="text-blue-500"/> Google Integrations</h3>
+                        <p className="text-slate-500 mt-1">Manage your connected Google Account services.</p>
                      </div>
+                     {!isGoogleLinked ? (
+                         <button onClick={handleGoogleLink} className="bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 px-4 py-2 rounded-xl font-bold flex items-center gap-2 transition-all shadow-sm">
+                             <svg className="w-5 h-5" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
+                             Link Google Account
+                         </button>
+                     ) : (
+                         <div className="flex items-center gap-2 text-green-600 bg-green-50 px-3 py-1.5 rounded-lg font-bold text-sm border border-green-100">
+                             <CheckCircle2 size={16}/> Account Linked
+                         </div>
+                     )}
+                 </div>
 
-                     {/* Calendars Sync Section */}
-                     {isGoogleLinked && fetchedCalendars.length > 0 && (
-                         <div className="mb-8 border-t border-slate-100 pt-6">
-                             <h4 className="font-bold text-lg text-slate-800 mb-4 flex items-center gap-2"><CalIcon size={18} /> Select Calendars to Sync</h4>
-                             <div className="bg-slate-50 p-4 rounded-xl space-y-3">
-                                 <div className="flex gap-4 mb-4 bg-white p-3 rounded-lg border border-slate-200 items-center">
-                                      <span className="text-sm font-bold text-slate-500 uppercase">Defaults:</span>
-                                      <select className="px-3 py-1.5 rounded-lg border border-slate-300 text-sm" value={selectedCalType} onChange={(e) => setSelectedCalType(e.target.value as any)}>
-                                          <option value="personal">Type: Personal (Prefix Name)</option>
-                                          <option value="family">Type: Family (No Prefix)</option>
-                                      </select>
-                                      <div className="flex gap-1">
-                                          {COLORS.map(c => (
-                                              <button 
-                                                key={c.name} 
-                                                className={`w-6 h-6 rounded-full border-2 ${selectedCalColor === c.value ? 'ring-2 ring-offset-1 ring-slate-400' : 'border-transparent'}`} 
-                                                onClick={() => setSelectedCalColor(c.value)}
-                                                style={{backgroundColor: c.name.toLowerCase() === 'white' ? '#fff' : c.name}}
-                                                title={c.name}
-                                              >
-                                                <div className={`w-full h-full rounded-full ${c.value.split(' ')[0]}`}></div>
-                                              </button>
-                                          ))}
+                 {isGoogleLinked && (
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-in fade-in slide-in-from-bottom-4">
+                        {/* Calendars Sync Section */}
+                         <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col">
+                             <div className="mb-4">
+                                <h4 className="font-bold text-lg text-slate-800 flex items-center gap-2"><CalIcon size={20} className="text-blue-500"/> Calendar Sync</h4>
+                                <p className="text-sm text-slate-500">Choose calendars to display on the family wall.</p>
+                             </div>
+                             
+                             <div className="bg-slate-50 p-4 rounded-xl space-y-3 mb-6">
+                                 <div className="flex flex-col gap-2 mb-4 bg-white p-3 rounded-lg border border-slate-200">
+                                      <span className="text-xs font-bold text-slate-400 uppercase">Configuration</span>
+                                      <div className="flex gap-2">
+                                        <select className="px-3 py-1.5 rounded-lg border border-slate-300 text-sm flex-1 bg-white" value={selectedCalType} onChange={(e) => setSelectedCalType(e.target.value as any)}>
+                                            <option value="personal">Type: Personal (Prefix Name)</option>
+                                            <option value="family">Type: Family (No Prefix)</option>
+                                        </select>
+                                        <div className="flex gap-1 bg-slate-100 p-1 rounded-lg">
+                                            {COLORS.map(c => (
+                                                <button 
+                                                  key={c.name} 
+                                                  className={`w-6 h-6 rounded-full border-2 transition-all ${selectedCalColor === c.value ? 'ring-2 ring-offset-1 ring-slate-400 scale-110' : 'border-transparent opacity-70 hover:opacity-100'}`} 
+                                                  onClick={() => setSelectedCalColor(c.value)}
+                                                  style={{backgroundColor: c.name.toLowerCase() === 'white' ? '#fff' : c.name}}
+                                                  title={c.name}
+                                                >
+                                                  <div className={`w-full h-full rounded-full ${c.value.split(' ')[0]}`}></div>
+                                                </button>
+                                            ))}
+                                        </div>
                                       </div>
                                  </div>
                                  
-                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                     {fetchedCalendars.map(cal => {
-                                         const isSynced = calendarSources.some(s => s.googleCalendarId === cal.id);
-                                         return (
-                                             <div key={cal.id} className="flex items-center justify-between bg-white p-3 rounded-lg border border-slate-200">
-                                                 <span className="font-medium text-slate-700 truncate flex-1 mr-2">{cal.summary}</span>
-                                                 {isSynced ? (
-                                                     <button onClick={() => {
-                                                         const source = calendarSources.find(s => s.googleCalendarId === cal.id);
-                                                         if(source) onRemoveCalendarSource(source.id);
-                                                     }} className="text-red-500 text-xs font-bold hover:underline">Remove</button>
-                                                 ) : (
-                                                     <button onClick={() => handleSyncCalendar(cal)} className="bg-blue-600 text-white px-3 py-1 rounded-lg text-xs font-bold hover:bg-blue-700">Sync</button>
-                                                 )}
-                                             </div>
-                                         );
-                                     })}
-                                 </div>
+                                 {fetchedCalendars.length > 0 ? (
+                                     <div className="grid grid-cols-1 gap-2 max-h-60 overflow-y-auto pr-1">
+                                         {fetchedCalendars.map(cal => {
+                                             const isSynced = calendarSources.some(s => s.googleCalendarId === cal.id);
+                                             return (
+                                                 <div key={cal.id} className="flex items-center justify-between bg-white p-3 rounded-lg border border-slate-200">
+                                                     <span className="font-medium text-slate-700 truncate flex-1 mr-2 text-sm">{cal.summary}</span>
+                                                     {isSynced ? (
+                                                         <button onClick={() => {
+                                                             const source = calendarSources.find(s => s.googleCalendarId === cal.id);
+                                                             if(source) onRemoveCalendarSource(source.id);
+                                                         }} className="text-red-500 text-xs font-bold hover:underline">Remove</button>
+                                                     ) : (
+                                                         <button onClick={() => handleSyncCalendar(cal)} className="bg-blue-600 text-white px-3 py-1 rounded-lg text-xs font-bold hover:bg-blue-700 transition-colors">Sync</button>
+                                                     )}
+                                                 </div>
+                                             );
+                                         })}
+                                     </div>
+                                 ) : (
+                                     <div className="text-center py-4 text-slate-400 text-sm italic">No calendars found.</div>
+                                 )}
                              </div>
                              
                              {/* Synced Calendars List */}
                              {calendarSources.length > 0 && (
-                                 <div className="mt-4">
-                                     <h5 className="text-sm font-bold text-slate-500 uppercase mb-2">Currently Synced</h5>
+                                 <div className="mt-auto pt-4 border-t border-slate-100">
+                                     <h5 className="text-xs font-bold text-slate-400 uppercase mb-2">Active Syncs</h5>
                                      <div className="space-y-2">
                                          {calendarSources.map(source => (
-                                             <div key={source.id} className={`flex items-center justify-between p-3 rounded-lg border ${source.color}`}>
-                                                 <div>
+                                             <div key={source.id} className={`flex items-center justify-between p-2 rounded-lg border text-sm ${source.color}`}>
+                                                 <div className="truncate pr-2">
                                                      <span className="font-bold">{source.name}</span>
-                                                     <span className="text-xs opacity-70 ml-2">({source.type === 'personal' ? `Personal: ${source.ownerName}` : 'Family'})</span>
+                                                     <span className="text-xs opacity-70 ml-2">({source.type === 'personal' ? 'Personal' : 'Family'})</span>
                                                  </div>
-                                                 <button onClick={() => onRemoveCalendarSource(source.id)} className="p-1 hover:bg-white/50 rounded"><Trash2 size={16}/></button>
+                                                 <button onClick={() => onRemoveCalendarSource(source.id)} className="p-1 hover:bg-white/50 rounded"><Trash2 size={14}/></button>
                                              </div>
                                          ))}
                                      </div>
                                  </div>
                              )}
                          </div>
-                     )}
 
-                     {/* Photos Sync Section */}
-                     {isGoogleLinked && fetchedAlbums.length > 0 && (
-                         <div className="border-t border-slate-100 pt-6">
-                             <h4 className="font-bold text-lg text-slate-800 mb-4 flex items-center gap-2"><ImageIcon size={18} /> Select Photo Album (Screensaver)</h4>
-                             <p className="text-sm text-slate-500 mb-4">Choose an album to display when the dashboard is idle.</p>
-                             
-                             <div className="grid grid-cols-2 md:grid-cols-3 gap-4 max-h-64 overflow-y-auto p-2">
-                                 {fetchedAlbums.map(album => (
-                                     <button 
-                                        key={album.id}
-                                        onClick={() => handleSyncAlbum(album)}
-                                        className={`p-4 rounded-xl border text-left transition-all ${photoConfig.albumId === album.id ? 'bg-purple-50 border-purple-300 ring-2 ring-purple-200' : 'bg-white border-slate-200 hover:border-purple-300'}`}
-                                     >
-                                         <h5 className="font-bold text-slate-800 truncate">{album.title}</h5>
-                                         <p className="text-xs text-slate-500">{album.mediaItemsCount} items</p>
-                                     </button>
-                                 ))}
+                         {/* Photos Sync Section */}
+                         <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col">
+                             <div className="mb-4">
+                                <h4 className="font-bold text-lg text-slate-800 flex items-center gap-2"><ImageIcon size={20} className="text-purple-500"/> Photo Frame</h4>
+                                <p className="text-sm text-slate-500">Select an album for the idle screensaver.</p>
                              </div>
+                             
+                             {fetchedAlbums.length > 0 ? (
+                                 <div className="grid grid-cols-1 gap-3 max-h-96 overflow-y-auto p-1">
+                                     {fetchedAlbums.map(album => (
+                                         <button 
+                                            key={album.id}
+                                            onClick={() => handleSyncAlbum(album)}
+                                            className={`p-3 rounded-xl border text-left transition-all flex items-center gap-3 ${photoConfig.albumId === album.id ? 'bg-purple-50 border-purple-300 ring-2 ring-purple-200' : 'bg-white border-slate-200 hover:border-purple-300 hover:shadow-md'}`}
+                                         >
+                                             <div className="w-12 h-12 bg-slate-100 rounded-lg flex items-center justify-center text-slate-400">
+                                                {album.coverPhotoBaseUrl ? (
+                                                    <img src={`${album.coverPhotoBaseUrl}=w100-h100-c`} className="w-full h-full object-cover rounded-lg" alt=""/>
+                                                ) : <ImageIcon size={20}/>}
+                                             </div>
+                                             <div className="overflow-hidden">
+                                                 <h5 className="font-bold text-slate-800 truncate text-sm">{album.title}</h5>
+                                                 <p className="text-xs text-slate-500">{album.mediaItemsCount} items</p>
+                                             </div>
+                                             {photoConfig.albumId === album.id && <div className="ml-auto text-purple-600"><CheckCircle2 size={20}/></div>}
+                                         </button>
+                                     ))}
+                                 </div>
+                             ) : (
+                                 <div className="text-center py-8 text-slate-400 text-sm italic bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                                     No albums found in this Google Photos account.
+                                 </div>
+                             )}
+                             
+                             {photoConfig.albumName && (
+                                <div className="mt-4 pt-4 border-t border-slate-100">
+                                    <div className="flex items-center gap-2 text-sm text-purple-700 bg-purple-50 p-3 rounded-xl border border-purple-100">
+                                        <CheckCircle2 size={16}/>
+                                        <span>Currently showing: <strong>{photoConfig.albumName}</strong></span>
+                                    </div>
+                                </div>
+                             )}
                          </div>
-                     )}
-                 </div>
+                    </div>
+                 )}
             </div>
         )}
 
