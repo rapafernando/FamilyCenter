@@ -256,34 +256,27 @@ const FamilyWallDashboard: React.FC<FamilyWallDashboardProps> = ({
       onToggleChore(choreId, kidId);
       
       // 2. Check for GRAND CELEBRATION Logic
-      // We calculate current stats + 1 because the state update is async and hasn't reflected yet
       const kidChores = chores.filter(c => 
          c.assignments.some(a => a.userId === kidId) && isChoreScheduledForToday(c)
       );
       const currentlyCompletedCount = kidChores.filter(c => c.completedBy.includes(kidId)).length;
       
-      // If (current + 1) == total, we just finished everything!
       if (currentlyCompletedCount + 1 === kidChores.length) {
           setShowGrandCelebration(kidId);
-          // Hide after 5 seconds
           setTimeout(() => setShowGrandCelebration(null), 5000);
       } else {
-          // Normal celebration
           setShowConfetti(true);
           setTimeout(() => setShowConfetti(false), 2500);
       }
       
-      // Set undo state for Toast
       setUndoState({
           choreId: choreId,
           kidId: kidId
       });
       
-      // Cleanup Modal
       setSelectedChore(null);
       setSelectedKidId(null);
 
-      // Cleanup Undo Toast after 5 seconds
       setTimeout(() => {
           setUndoState(prev => prev?.choreId === choreId ? null : prev);
       }, 5000);
@@ -321,25 +314,18 @@ const FamilyWallDashboard: React.FC<FamilyWallDashboardProps> = ({
         </nav>
 
         <div className="flex flex-col gap-4 mt-auto">
-            {currentUser && (
-                 <button 
-                  onClick={onLogout}
-                  className="flex flex-col items-center gap-1 text-slate-400 hover:text-red-500 transition-colors"
-                  title="Sign Out"
-                >
-                  <LogOut size={24} />
-                </button>
-            )}
+            {/* Generic Settings Button that asks 'Who is here?' */}
             <button 
-            onClick={onSettingsClick}
-            className="flex flex-col items-center gap-1 text-slate-400 hover:text-slate-600 transition-colors"
+                onClick={onSettingsClick}
+                className="flex flex-col items-center gap-1 text-slate-400 hover:text-slate-600 transition-colors"
+                title="Switch User / Settings"
             >
-            {currentUser ? (
-                <img src={currentUser.avatar} className="w-8 h-8 rounded-full border-2 border-slate-200" alt="Me"/>
-            ) : (
-                <Settings size={24} />
-            )}
-            <span className="text-[10px] font-medium uppercase tracking-wider">{currentUser ? 'My Profile' : 'Login'}</span>
+                {currentUser ? (
+                    <img src={currentUser.avatar} className="w-8 h-8 rounded-full border-2 border-slate-200" alt="Me"/>
+                ) : (
+                    <Settings size={24} />
+                )}
+                <span className="text-[10px] font-medium uppercase tracking-wider">Settings</span>
             </button>
         </div>
       </div>
@@ -392,8 +378,7 @@ const FamilyWallDashboard: React.FC<FamilyWallDashboardProps> = ({
           </header>
         )}
 
-        {/* ... (Calendar, Chores, Meals, Photos Views are largely same as before, preserving structure) ... */}
-        
+        {/* ... (Rest of dashboard remains similar, reusing previous XML structure for brevity where content is unchanged) ... */}
         {/* Calendar View */}
         {activeTab === 'calendar' && (
           <div className="flex-1 flex flex-col overflow-hidden p-4 relative">
@@ -510,6 +495,7 @@ const FamilyWallDashboard: React.FC<FamilyWallDashboardProps> = ({
                                          {tasks.map(chore => {
                                              const isCompleted = chore.completedBy.includes(kid.id);
                                              const points = chore.assignments.find(a => a.userId === kid.id)?.points || 0;
+                                             // Interaction check - Parents or specific Kid
                                              const canInteract = !currentUser || currentUser.role === UserRole.PARENT || currentUser.id === kid.id;
                                              return (
                                                  <button key={chore.id} onClick={() => handleChoreClick(chore, kid.id)} disabled={!canInteract}

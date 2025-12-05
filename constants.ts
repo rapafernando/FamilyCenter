@@ -10,7 +10,8 @@ export const INITIAL_USERS: User[] = [
     avatar: 'https://ui-avatars.com/api/?name=Parent&background=0D8ABC&color=fff',
     role: UserRole.PARENT,
     points: 0,
-    totalPointsEarned: 0
+    totalPointsEarned: 0,
+    email: 'parent@example.com' // Default email for resets
   }
 ];
 
@@ -23,7 +24,8 @@ export const INITIAL_REWARDS: Reward[] = [
     title: 'Screen Time (30 mins)',
     cost: 50,
     approved: true,
-    image: 'https://images.unsplash.com/photo-1517430816045-df4b7de8dbd8?w=200&h=200&fit=crop'
+    image: 'https://images.unsplash.com/photo-1517430816045-df4b7de8dbd8?w=200&h=200&fit=crop',
+    isShared: false
   }
 ];
 

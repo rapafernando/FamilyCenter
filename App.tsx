@@ -27,7 +27,6 @@ const App: React.FC = () => {
         
         // MIGRATION: Fix old chores that might be missing the new fields
         const safeChores = (Array.isArray(parsed.chores) ? parsed.chores : INITIAL_CHORES).map((c: any) => {
-           // If 'assignments' array is missing, try to migrate from old 'assignedTo' field
            if (!c.assignments || !Array.isArray(c.assignments)) {
              const assignments: ChoreAssignment[] = [];
              if (c.assignedTo) {
@@ -76,10 +75,7 @@ const App: React.FC = () => {
     };
   });
 
-  // Determine initial view based on whether we have a logged-in user
-  const [view, setView] = useState<ViewState>(() => {
-    return state.currentUser ? 'WALL' : 'AUTH';
-  });
+  const [view, setView] = useState<ViewState>('WALL'); // Default to Wall
 
   // Save to LocalStorage whenever state changes
   useEffect(() => {
@@ -92,63 +88,92 @@ const App: React.FC = () => {
 
   const handleLogin = (user: User) => {
     setState(prev => ({ ...prev, currentUser: user }));
-    setView('WALL'); 
+    setView('USER_SESSION'); // Go straight to session after login
   };
 
   const handleLogout = () => {
     setState(prev => ({ ...prev, currentUser: null }));
+    setView('WALL');
+  };
+
+  const handleOpenAuth = () => {
     setView('AUTH');
   };
 
-  const handleSessionOpen = () => {
-    setView('USER_SESSION');
+  const handleCloseAuth = () => {
+    setView('WALL');
   };
 
-  // Google Sync Logic
-  const handleGoogleSync = async (googleProfile: any) => {
-    try {
-      const googleEvents = await fetchGoogleCalendarEvents();
+  const handleSetPin = (userId: string, pin: string) => {
+    setState(prev => ({
+      ...prev,
+      users: prev.users.map(u => u.id === userId ? { ...u, pin } : u)
+    }));
+  };
+
+  const handleAddReward = (reward: Reward) => {
+     setState(prev => ({
+       ...prev,
+       rewards: [...prev.rewards, reward]
+     }));
+  };
+
+  const handleDeleteReward = (id: string) => {
+    setState(prev => ({
+      ...prev,
+      rewards: prev.rewards.filter(r => r.id !== id)
+    }));
+  };
+
+  // Shared Reward Redemption Logic
+  const handleRedeemSharedReward = (rewardId: string) => {
+      const reward = state.rewards.find(r => r.id === rewardId);
+      if (!reward || !reward.isShared) return;
+
+      const kids = state.users.filter(u => u.role === UserRole.KID);
+      if (kids.length === 0) {
+          alert("No kids to redeem for!");
+          return;
+      }
+
+      const costPerKid = Math.ceil(reward.cost / kids.length);
       
-      setState(prev => ({
-        ...prev,
-        events: [...(prev.events || []), ...(googleEvents || [])],
-        users: prev.users.map(u => 
-          u.id === prev.currentUser?.id && u.role === UserRole.PARENT
-            ? { ...u, name: googleProfile.given_name || u.name, avatar: googleProfile.picture || u.avatar } 
-            : u
-        )
-      }));
+      // Check if all kids can afford it
+      const poorKids = kids.filter(k => k.points < costPerKid);
+      
+      if (poorKids.length > 0) {
+          alert(`Cannot redeem yet! ${poorKids.map(k => k.name).join(', ')} need(s) more points. Cost is ${costPerKid} per kid.`);
+          return;
+      }
 
-    } catch (error) {
-      console.error("Failed to sync calendar", error);
-    }
+      // Deduct points
+      const updatedUsers = state.users.map(u => {
+          if (u.role === UserRole.KID) {
+              return { ...u, points: u.points - costPerKid };
+          }
+          return u;
+      });
+
+      // Mark reward as redeemed (optional, or just keep it available)
+      // For now, let's just deduct points and show success
+      setState(prev => ({ ...prev, users: updatedUsers }));
+      alert(`Success! Redeemed ${reward.title}. Deducted ${costPerKid} points from each kid.`);
   };
 
-  // --- Actions ---
+  // --- Actions (Existing) ---
 
   const handleToggleChore = (choreId: string, asUserId?: string) => {
     setState(prev => {
       const chore = prev.chores.find(c => c.id === choreId);
       if (!chore) return prev;
-
-      // Determine the user performing the action (or the user receiving the points)
-      // If asUserId is passed (e.g. Parent clicking for Kid), use that.
-      // Otherwise use currentUser (Kid clicking for themselves).
       const targetUserId = asUserId || prev.currentUser?.id;
       if (!targetUserId) return prev;
-
       const targetUser = prev.users.find(u => u.id === targetUserId);
       if (!targetUser) return prev;
-
-      // Find if target user is assigned to this chore
       const assignment = chore.assignments.find(a => a.userId === targetUserId);
-      if (!assignment) return prev; // User not assigned
-
-      // Check if user already completed it today
+      if (!assignment) return prev; 
       const alreadyCompleted = chore.completedBy.includes(targetUserId);
       const todayDate = new Date().toISOString().split('T')[0];
-
-      // Update User Points
       const updatedUsers = prev.users.map(u => {
         if (u.id === targetUserId) {
           return {
@@ -159,8 +184,6 @@ const App: React.FC = () => {
         }
         return u;
       });
-
-      // Update Chore Completion Status
       const updatedChores = prev.chores.map(c => {
         if (c.id === choreId) {
             let newCompletedBy = [...c.completedBy];
@@ -173,12 +196,8 @@ const App: React.FC = () => {
         }
         return c;
       });
-
-      // Update Chore History (Logs)
       let updatedHistory = [...(prev.choreHistory || [])];
-      
       if (!alreadyCompleted) {
-         // ADD LOG
          const newLog: ChoreLog = {
              id: `log-${Date.now()}`,
              choreId: chore.id,
@@ -191,23 +210,12 @@ const App: React.FC = () => {
          };
          updatedHistory.push(newLog);
       } else {
-         // REMOVE LOG (Undo action for today)
-         // Find the most recent log for this chore/user today and remove it
-         const logIndex = updatedHistory.findIndex(l => 
-             l.choreId === choreId && 
-             l.userId === targetUserId && 
-             l.date === todayDate
-         );
+         const logIndex = updatedHistory.findIndex(l => l.choreId === choreId && l.userId === targetUserId && l.date === todayDate);
          if (logIndex > -1) {
              updatedHistory.splice(logIndex, 1);
          }
       }
-
-      // Update current user state as well to reflect points immediately if we are that user
-      const updatedCurrentUser = prev.currentUser?.id === targetUserId 
-         ? updatedUsers.find(u => u.id === targetUserId) || prev.currentUser
-         : prev.currentUser;
-
+      const updatedCurrentUser = prev.currentUser?.id === targetUserId ? updatedUsers.find(u => u.id === targetUserId) || prev.currentUser : prev.currentUser;
       return {
         ...prev,
         users: updatedUsers,
@@ -241,7 +249,6 @@ const App: React.FC = () => {
 
   const handleRequestReward = (title: string, cost: number) => {
      if(!state.currentUser) return;
-     
      const newReward: Reward = {
        id: `r${Date.now()}`,
        title,
@@ -250,11 +257,7 @@ const App: React.FC = () => {
        approved: false,
        image: `https://ui-avatars.com/api/?name=${encodeURIComponent(title)}&background=random`
      };
-
-     setState(prev => ({
-       ...prev,
-       rewards: [...prev.rewards, newReward]
-     }));
+     setState(prev => ({ ...prev, rewards: [...prev.rewards, newReward] }));
   };
 
   const handleApproveReward = (id: string) => {
@@ -268,16 +271,10 @@ const App: React.FC = () => {
     setState(prev => {
       const existingMealIndex = prev.meals.findIndex(m => m.date === date && m.type === type);
       const newMeals = [...prev.meals];
-      
       if (existingMealIndex >= 0) {
         newMeals[existingMealIndex] = { ...newMeals[existingMealIndex], title };
       } else {
-        newMeals.push({
-          id: `m-${Date.now()}`,
-          date,
-          type,
-          title
-        });
+        newMeals.push({ id: `m-${Date.now()}`, date, type, title });
       }
       return { ...prev, meals: newMeals };
     });
@@ -294,7 +291,8 @@ const App: React.FC = () => {
       role,
       avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random`,
       points: 0,
-      totalPointsEarned: 0
+      totalPointsEarned: 0,
+      email: role === UserRole.PARENT ? 'newparent@example.com' : undefined // Placeholder
     };
     setState(prev => ({ ...prev, users: [...prev.users, newUser] }));
   };
@@ -307,10 +305,7 @@ const App: React.FC = () => {
     setState(prev => ({
       ...prev,
       users: prev.users.filter(u => u.id !== id),
-      chores: prev.chores.filter(c => 
-        // Keep chore if assigned to multiple people, just remove this user from assignments
-        c.assignments.length > 1 || c.assignments[0].userId !== id
-      ).map(c => ({
+      chores: prev.chores.filter(c => c.assignments.length > 1 || c.assignments[0].userId !== id).map(c => ({
           ...c,
           assignments: c.assignments.filter(a => a.userId !== id)
       }))
@@ -324,12 +319,8 @@ const App: React.FC = () => {
       <AuthScreen 
         users={state.users} 
         onLogin={handleLogin}
-        onGoogleSuccess={(profile) => {
-           handleGoogleSync(profile);
-           const parent = state.users.find(u => u.role === UserRole.PARENT);
-           if(parent) handleLogin(parent);
-        }}
-        onCancel={() => {}} 
+        onCancel={handleCloseAuth}
+        onSetPin={handleSetPin}
       />
     );
   }
@@ -343,10 +334,10 @@ const App: React.FC = () => {
         chores={state.chores || []}
         meals={state.meals || []}
         photos={state.photos || []}
-        onSettingsClick={handleSessionOpen}
+        onSettingsClick={handleOpenAuth} // Opens the "Who is here" screen
         onToggleChore={handleToggleChore}
         onUpdateMeal={handleUpdateMeal}
-        currentUser={state.currentUser}
+        currentUser={state.currentUser} // Likely null in wall mode, but passed if active
         onLogout={handleLogout}
       />
     );
@@ -377,6 +368,9 @@ const App: React.FC = () => {
               onUpdateFamilyName={handleUpdateFamilyName}
               onAddUser={handleAddUser}
               onDeleteUser={handleDeleteUser}
+              onAddReward={handleAddReward}
+              onDeleteReward={handleDeleteReward}
+              onRedeemSharedReward={handleRedeemSharedReward}
            />
          ) : (
            <KidDashboard 

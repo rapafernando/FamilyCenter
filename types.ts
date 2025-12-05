@@ -11,6 +11,8 @@ export interface User {
   role: UserRole;
   points: number; // Current balance
   totalPointsEarned: number; // Lifetime stats
+  pin?: string; // 4-digit PIN for parents
+  email?: string; // For password reset
 }
 
 export interface ChoreAssignment {
@@ -51,8 +53,10 @@ export interface Reward {
   title: string;
   cost: number;
   image?: string;
-  requestedBy?: string; // If it's a wishlist item
+  requestedBy?: string; // If it's a wishlist item. Null if created by parent.
   approved: boolean;
+  isShared?: boolean; // If true, cost is split among all kids
+  redeemed?: boolean; // For tracking history in parent portal
 }
 
 export interface CalendarEvent {
