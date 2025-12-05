@@ -123,20 +123,27 @@ const App: React.FC = () => {
 
   // --- Actions ---
 
-  const handleToggleChore = (choreId: string) => {
+  const handleToggleChore = (choreId: string, asUserId?: string) => {
     setState(prev => {
       const chore = prev.chores.find(c => c.id === choreId);
-      if (!chore || !prev.currentUser) return prev;
+      if (!chore) return prev;
 
-      // Find if current user is assigned to this chore
-      const assignment = chore.assignments.find(a => a.userId === prev.currentUser?.id);
+      // Determine the user performing the action (or the user receiving the points)
+      // If asUserId is passed (e.g. Parent clicking for Kid), use that.
+      // Otherwise use currentUser (Kid clicking for themselves).
+      const targetUserId = asUserId || prev.currentUser?.id;
+
+      if (!targetUserId) return prev;
+
+      // Find if target user is assigned to this chore
+      const assignment = chore.assignments.find(a => a.userId === targetUserId);
       if (!assignment) return prev; // User not assigned
 
       // Check if user already completed it today
-      const alreadyCompleted = chore.completedBy.includes(prev.currentUser.id);
+      const alreadyCompleted = chore.completedBy.includes(targetUserId);
 
       const updatedUsers = prev.users.map(u => {
-        if (u.id === prev.currentUser?.id) {
+        if (u.id === targetUserId) {
           return {
             ...u,
             points: alreadyCompleted ? u.points - assignment.points : u.points + assignment.points,
@@ -150,17 +157,19 @@ const App: React.FC = () => {
         if (c.id === choreId) {
             let newCompletedBy = [...c.completedBy];
             if (alreadyCompleted) {
-                newCompletedBy = newCompletedBy.filter(id => id !== prev.currentUser?.id);
+                newCompletedBy = newCompletedBy.filter(id => id !== targetUserId);
             } else {
-                newCompletedBy.push(prev.currentUser?.id || '');
+                newCompletedBy.push(targetUserId);
             }
             return { ...c, completedBy: newCompletedBy };
         }
         return c;
       });
 
-      // Update current user state as well to reflect points immediately
-      const updatedCurrentUser = updatedUsers.find(u => u.id === prev.currentUser?.id) || prev.currentUser;
+      // Update current user state as well to reflect points immediately if we are that user
+      const updatedCurrentUser = prev.currentUser?.id === targetUserId 
+         ? updatedUsers.find(u => u.id === targetUserId) || prev.currentUser
+         : prev.currentUser;
 
       return {
         ...prev,

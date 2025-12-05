@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { User, Chore, Reward } from '../types';
 import { CheckCircle2, Circle, Gift, Trophy, Star, Plus, Clock } from 'lucide-react';
@@ -8,7 +7,7 @@ interface KidDashboardProps {
   currentUser: User;
   chores: Chore[];
   rewards: Reward[];
-  onToggleChore: (id: string) => void;
+  onToggleChore: (id: string, userId?: string) => void;
   onRequestReward: (title: string, cost: number) => void;
 }
 

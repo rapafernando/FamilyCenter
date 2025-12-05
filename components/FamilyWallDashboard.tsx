@@ -1,11 +1,10 @@
-
 import React, { useState, useEffect } from 'react';
-import { User, CalendarEvent, Chore, Meal, MealType, Photo } from '../types';
+import { User, CalendarEvent, Chore, Meal, MealType, Photo, UserRole } from '../types';
 import { 
   Calendar, CheckSquare, Settings, Coffee, Utensils, 
   Image as ImageIcon, Moon, ChevronLeft, ChevronRight,
   CloudSun, Clock, Play, Pause, RefreshCw, X, LogOut,
-  Sparkles, PartyPopper, Sun, Sunrise, Sunset
+  Sparkles, PartyPopper, Sun, Sunrise, Sunset, Undo
 } from 'lucide-react';
 
 interface FamilyWallDashboardProps {
@@ -16,7 +15,7 @@ interface FamilyWallDashboardProps {
   meals: Meal[];
   photos: Photo[];
   onSettingsClick: () => void;
-  onToggleChore: (id: string) => void;
+  onToggleChore: (id: string, userId?: string) => void;
   onUpdateMeal: (date: string, type: MealType, title: string) => void;
   currentUser: User | null;
   onLogout: () => void;
@@ -85,7 +84,9 @@ const FamilyWallDashboard: React.FC<FamilyWallDashboardProps> = ({
 
   // Chore Completion Interaction State
   const [selectedChore, setSelectedChore] = useState<Chore | null>(null);
+  const [selectedKidId, setSelectedKidId] = useState<string | null>(null);
   const [showConfetti, setShowConfetti] = useState(false);
+  const [undoState, setUndoState] = useState<{choreId: string, kidId: string} | null>(null);
 
   // Clock ticker
   useEffect(() => {
@@ -211,30 +212,61 @@ const FamilyWallDashboard: React.FC<FamilyWallDashboardProps> = ({
   };
 
   const handleChoreClick = (chore: Chore, kidId: string) => {
-      // Only allow interaction if current user is null (kiosk mode) or the kid themselves
-      if (currentUser && currentUser.id !== kidId) return;
+      // Permission check:
+      // Allow if:
+      // 1. No currentUser (Kiosk mode)
+      // 2. currentUser is the kid assigned to the chore
+      // 3. currentUser is a PARENT
+      const isParent = currentUser?.role === UserRole.PARENT;
+      const isAssignedKid = currentUser?.id === kidId;
+      const isKiosk = !currentUser;
+
+      if (!isParent && !isAssignedKid && !isKiosk) return;
       
       const isCompleted = chore.completedBy.includes(kidId);
       if (isCompleted) {
-          // If already done, toggle off immediately without fanfare
-          onToggleChore(chore.id);
+          // Undo completion immediately if clicked again
+          onToggleChore(chore.id, kidId);
+          setUndoState(null); // Clear undo toast if we manually toggled
       } else {
           // If not done, show celebration modal
           setSelectedChore(chore);
+          setSelectedKidId(kidId);
       }
   };
 
   const confirmChoreCompletion = () => {
-      if (!selectedChore) return;
+      if (!selectedChore || !selectedKidId) return;
       
-      onToggleChore(selectedChore.id);
+      onToggleChore(selectedChore.id, selectedKidId);
       setShowConfetti(true);
       
-      // Cleanup
+      // Set undo state for Toast
+      setUndoState({
+          choreId: selectedChore.id,
+          kidId: selectedKidId
+      });
+      
+      // Cleanup Modal
+      setSelectedChore(null);
+      setSelectedKidId(null);
+
+      // Cleanup Confetti
       setTimeout(() => {
           setShowConfetti(false);
-          setSelectedChore(null);
       }, 2500);
+
+      // Cleanup Undo Toast after 5 seconds
+      setTimeout(() => {
+          setUndoState(prev => prev?.choreId === selectedChore.id ? null : prev);
+      }, 5000);
+  };
+
+  const handleUndoAction = () => {
+      if(undoState) {
+          onToggleChore(undoState.choreId, undoState.kidId);
+          setUndoState(null);
+      }
   };
 
   const getDayName = (date: Date) => date.toLocaleDateString('en-US', { weekday: 'short' });
@@ -523,17 +555,19 @@ const FamilyWallDashboard: React.FC<FamilyWallDashboardProps> = ({
                                              const isCompleted = chore.completedBy.includes(kid.id);
                                              const points = chore.assignments.find(a => a.userId === kid.id)?.points || 0;
                                              
+                                             const canInteract = !currentUser || currentUser.role === UserRole.PARENT || currentUser.id === kid.id;
+
                                              return (
                                                  <button 
                                                     key={chore.id} 
                                                     onClick={() => handleChoreClick(chore, kid.id)}
-                                                    disabled={currentUser && currentUser.id !== kid.id}
+                                                    disabled={!canInteract}
                                                     className={`w-full text-left flex items-center p-3 rounded-2xl border transition-all group relative overflow-hidden
                                                         ${isCompleted 
                                                             ? 'bg-green-50 border-green-200 opacity-70' 
                                                             : 'bg-white border-slate-100 hover:border-blue-300 hover:shadow-md hover:scale-[1.01]'
                                                         }
-                                                        ${currentUser && currentUser.id !== kid.id ? 'cursor-default opacity-50' : 'cursor-pointer'}
+                                                        ${!canInteract ? 'cursor-default opacity-50' : 'cursor-pointer'}
                                                     `}
                                                  >
                                                     <div className={`w-10 h-10 rounded-xl flex items-center justify-center mr-4 shadow-sm transition-colors ${isCompleted ? 'bg-green-500 text-white' : 'bg-blue-50 text-blue-600 group-hover:bg-blue-100'}`}>
@@ -720,6 +754,21 @@ const FamilyWallDashboard: React.FC<FamilyWallDashboardProps> = ({
                         className="w-full py-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold text-lg rounded-2xl hover:scale-[1.02] active:scale-[0.98] transition-transform shadow-xl shadow-blue-200"
                     >
                         Yes, I did it! 🚀
+                    </button>
+                </div>
+            </div>
+        )}
+
+        {/* Undo Toast Notification */}
+        {undoState && (
+            <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 z-[70] animate-in fade-in slide-in-from-bottom-4">
+                <div className="bg-slate-900 text-white px-6 py-4 rounded-full shadow-2xl flex items-center gap-6">
+                    <span className="font-medium">Task Completed!</span>
+                    <button 
+                        onClick={handleUndoAction}
+                        className="text-blue-300 hover:text-white font-bold uppercase tracking-wider text-sm flex items-center gap-2"
+                    >
+                        <Undo size={16} /> Undo
                     </button>
                 </div>
             </div>
