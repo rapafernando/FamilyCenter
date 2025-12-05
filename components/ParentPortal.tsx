@@ -2,7 +2,7 @@
 // ... imports remain the same
 import React, { useState, useEffect } from 'react';
 import { User, Chore, Reward, UserRole, TimeOfDay, ChoreFrequency, ChoreLog, CalendarSource, PhotoConfig } from '../types';
-import { Calendar as CalIcon, CheckSquare, Settings, Plus, Trash2, UserPlus, Save, Clock, Repeat, MoreVertical, Edit, Copy, BarChart2, TrendingUp, History, Gift, Users, Link, Image as ImageIcon, RefreshCw, CheckCircle2, Loader2, AlertTriangle, LogOut } from 'lucide-react';
+import { Calendar as CalIcon, CheckSquare, Settings, Plus, Trash2, UserPlus, Save, Clock, Repeat, MoreVertical, Edit, Copy, BarChart2, TrendingUp, History, Gift, Users, Link, Image as ImageIcon, RefreshCw, CheckCircle2, Loader2, AlertTriangle, LogOut, ShieldAlert } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line } from 'recharts';
 import { initGoogleClient, signInWithGoogle, fetchCalendarList, fetchAlbums, revokeToken } from '../services/googleService';
 
@@ -302,6 +302,8 @@ const ParentPortal: React.FC<ParentPortalProps> = ({
      });
   };
 
+  const isInsufficientScopes = photoError?.includes("insufficient") || photoError?.includes("scope");
+
   return (
     <div className="flex h-full bg-slate-100">
       <div className="w-64 bg-slate-900 text-slate-300 flex flex-col p-4 hidden md:flex">
@@ -384,11 +386,26 @@ const ParentPortal: React.FC<ParentPortalProps> = ({
                                      <AlertTriangle size={16} className="mt-0.5 flex-shrink-0"/>
                                      <div>
                                         <p className="font-bold">Error loading albums</p>
-                                        <p className="text-xs opacity-80">{photoError}</p>
-                                        {/* Added helpful tip about permissions */}
-                                        <p className="text-[10px] text-slate-500 mt-2 bg-white/50 p-2 rounded border border-red-100">
-                                            <strong>Fix:</strong> Click "Reset Permissions", log in again, and ensure you check the box for <strong>Google Photos</strong> in the consent popup.
-                                        </p>
+                                        <p className="text-xs opacity-80 mb-2">{photoError}</p>
+                                        
+                                        {isInsufficientScopes ? (
+                                            <div className="bg-white/60 p-3 rounded border border-red-100">
+                                                <p className="text-xs mb-2"><strong>Reason:</strong> The app is missing permission to access your Photos.</p>
+                                                <button 
+                                                    onClick={() => handleGoogleLink(true)} 
+                                                    className="w-full bg-purple-600 hover:bg-purple-700 text-white px-3 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-2"
+                                                >
+                                                    <ShieldAlert size={14} /> Grant Photos Access
+                                                </button>
+                                                <p className="text-[10px] text-slate-500 mt-2">
+                                                    <strong>Important:</strong> In the popup, make sure to check the box for <em>"See, upload, and organize... Google Photos"</em>.
+                                                </p>
+                                            </div>
+                                        ) : (
+                                            <p className="text-[10px] text-slate-500 mt-2 bg-white/50 p-2 rounded border border-red-100">
+                                                <strong>Tip:</strong> If you see "Project not found" or "API not enabled", you must enable the <em>Google Photos Library API</em> in your Google Cloud Console.
+                                            </p>
+                                        )}
                                      </div>
                                  </div>
                              )}
