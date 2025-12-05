@@ -126,41 +126,29 @@ Your app is now running at `http://YOUR_SERVER_IP:3000`.
 
 ### 7. Setup Nginx Reverse Proxy
 
-To access the app via port 80 (standard HTTP) instead of 3000.
+We have included a pre-configured `nginx.conf` file in the repository.
 
-```bash
-sudo apt install -y nginx
-```
+1.  **Install Nginx**:
+    ```bash
+    sudo apt install -y nginx
+    ```
 
-Create a config file:
-```bash
-sudo nano /etc/nginx/sites-available/family-dashboard
-```
+2.  **Copy the configuration**:
+    ```bash
+    sudo cp nginx.conf /etc/nginx/sites-available/family-dashboard
+    ```
 
-Paste the following configuration:
-```nginx
-server {
-    listen 80;
-    server_name YOUR_DOMAIN_OR_IP;
+3.  **Enable the site**:
+    ```bash
+    sudo ln -s /etc/nginx/sites-available/family-dashboard /etc/nginx/sites-enabled/
+    sudo rm /etc/nginx/sites-enabled/default
+    ```
 
-    location / {
-        proxy_pass http://localhost:3000;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-        proxy_cache_bypass $http_upgrade;
-    }
-}
-```
-
-Enable the site and restart Nginx:
-```bash
-sudo ln -s /etc/nginx/sites-available/family-dashboard /etc/nginx/sites-enabled/
-sudo rm /etc/nginx/sites-enabled/default
-sudo nginx -t
-sudo systemctl restart nginx
-```
+4.  **Test and Restart**:
+    ```bash
+    sudo nginx -t
+    sudo systemctl restart nginx
+    ```
 
 ### 8. Setup SSL (HTTPS)
 
@@ -177,19 +165,19 @@ Secure your domain with a free Let's Encrypt certificate.
     ```
 
 3.  **Generate Certificate**:
-    Replace `YOUR_DOMAIN` with your actual domain name (e.g., family-dashboard.com).
     ```bash
-    sudo certbot --nginx -d YOUR_DOMAIN
+    sudo certbot --nginx -d familycentercalendar.com -d www.familycentercalendar.com
     ```
-    Follow the prompts (enter email, agree to terms). Certbot will automatically update your Nginx configuration.
+    
+    *If Certbot says it cannot find a server block, ensure you ran step 7 correctly to copy the `nginx.conf` file.*
 
 4.  **Update Google Cloud Console**:
     Since your URL changed from `http` to `https`, Google Sign-In will stop working until you update it.
     1.  Go to [Google Cloud Console](https://console.cloud.google.com/).
     2.  Navigate to **APIs & Services > Credentials**.
     3.  Edit your OAuth 2.0 Client ID.
-    4.  Under **Authorized JavaScript origins**, add `https://YOUR_DOMAIN`.
-    5.  Under **Authorized redirect URIs**, add `https://YOUR_DOMAIN`.
+    4.  Under **Authorized JavaScript origins**, add `https://familycentercalendar.com`.
+    5.  Under **Authorized redirect URIs**, add `https://familycentercalendar.com`.
     6.  Click **Save**.
 
 ## License
