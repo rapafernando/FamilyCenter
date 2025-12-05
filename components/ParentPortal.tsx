@@ -1,6 +1,6 @@
 
 // ... imports remain the same
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { User, Chore, Reward, UserRole, TimeOfDay, ChoreFrequency, ChoreLog, CalendarSource, PhotoConfig } from '../types';
 import { Calendar as CalIcon, CheckSquare, Settings, Plus, Trash2, UserPlus, Save, Clock, Repeat, MoreVertical, Edit, Copy, BarChart2, TrendingUp, History, Gift, Users, Link, Image as ImageIcon, RefreshCw, CheckCircle2 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line } from 'recharts';
@@ -16,6 +16,7 @@ interface ParentPortalProps {
   calendarSources: CalendarSource[];
   photoConfig: PhotoConfig;
   currentUser: User;
+  googleAccessToken?: string; // New prop
   onAddChore: (chore: Omit<Chore, 'id'>) => void;
   onUpdateChore: (chore: Chore) => void;
   onDeleteChore: (id: string) => void;
@@ -30,6 +31,7 @@ interface ParentPortalProps {
   onAddCalendarSource: (source: CalendarSource) => void;
   onRemoveCalendarSource: (id: string) => void;
   onSetPhotoConfig: (config: PhotoConfig) => void;
+  onSetGoogleToken: (token: string) => void; // New prop
 }
 
 const CHORE_ICONS = [
@@ -55,10 +57,10 @@ const COLORS = [
 ];
 
 const ParentPortal: React.FC<ParentPortalProps> = ({ 
-  familyName, users, chores, rewards, choreHistory = [], calendarSources, photoConfig, currentUser,
+  familyName, users, chores, rewards, choreHistory = [], calendarSources, photoConfig, currentUser, googleAccessToken,
   onAddChore, onUpdateChore, onDeleteChore, onApproveReward, 
   onUpdateFamilyName, onAddUser, onDeleteUser, onAddReward, onUpdateReward, onDeleteReward, onRedeemSharedReward,
-  onAddCalendarSource, onRemoveCalendarSource, onSetPhotoConfig
+  onAddCalendarSource, onRemoveCalendarSource, onSetPhotoConfig, onSetGoogleToken
 }) => {
   const [activeTab, setActiveTab] = useState<'overview' | 'chores' | 'rewards' | 'settings' | 'history' | 'integrations'>('overview');
   
@@ -94,8 +96,9 @@ const ParentPortal: React.FC<ParentPortalProps> = ({
   // Integration State
   const [fetchedCalendars, setFetchedCalendars] = useState<any[]>([]);
   const [fetchedAlbums, setFetchedAlbums] = useState<any[]>([]);
-  const [isGoogleLinked, setIsGoogleLinked] = useState(false);
-  const [currentAccessToken, setCurrentAccessToken] = useState<string | null>(null);
+  
+  // Initialize 'isGoogleLinked' from props so it persists
+  const isGoogleLinked = !!googleAccessToken;
   
   // New Integration Config State
   const [selectedCalColor, setSelectedCalColor] = useState(COLORS[0].value);
@@ -104,6 +107,14 @@ const ParentPortal: React.FC<ParentPortalProps> = ({
   const kids = users.filter(u => u.role === UserRole.KID);
   const pendingRewards = rewards.filter(r => !r.approved);
   const activeRewards = rewards.filter(r => r.approved);
+
+  // Fetch data on load if token exists
+  useEffect(() => {
+      if (googleAccessToken) {
+          fetchCalendarList(googleAccessToken).then(setFetchedCalendars);
+          fetchAlbums(googleAccessToken).then(setFetchedAlbums);
+      }
+  }, [googleAccessToken]);
 
   const handleAddUserSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -258,9 +269,8 @@ const ParentPortal: React.FC<ParentPortalProps> = ({
   const handleGoogleLink = () => {
       initGoogleClient((response) => {
           if(response && response.access_token) {
-              setCurrentAccessToken(response.access_token);
-              setIsGoogleLinked(true);
-              // Fetch Lists
+              onSetGoogleToken(response.access_token);
+              // Fetch Lists immediately
               fetchCalendarList(response.access_token).then(setFetchedCalendars);
               fetchAlbums(response.access_token).then(setFetchedAlbums);
           }
@@ -269,7 +279,7 @@ const ParentPortal: React.FC<ParentPortalProps> = ({
   };
 
   const handleSyncCalendar = (cal: any) => {
-      if (!currentAccessToken) return;
+      if (!googleAccessToken) return;
       
       onAddCalendarSource({
           id: `src-${Date.now()}`,
@@ -279,17 +289,17 @@ const ParentPortal: React.FC<ParentPortalProps> = ({
           type: selectedCalType,
           ownerId: currentUser.id,
           ownerName: currentUser.name,
-          accessToken: currentAccessToken
+          accessToken: googleAccessToken
       });
   };
 
   const handleSyncAlbum = (album: any) => {
-      if (!currentAccessToken) return;
+      if (!googleAccessToken) return;
 
       onSetPhotoConfig({
           albumId: album.id,
           albumName: album.title,
-          accessToken: currentAccessToken
+          accessToken: googleAccessToken
       });
   };
 
@@ -676,12 +686,12 @@ const ParentPortal: React.FC<ParentPortalProps> = ({
                                             onClick={() => handleSyncAlbum(album)}
                                             className={`p-3 rounded-xl border text-left transition-all flex items-center gap-3 ${photoConfig.albumId === album.id ? 'bg-purple-50 border-purple-300 ring-2 ring-purple-200' : 'bg-white border-slate-200 hover:border-purple-300 hover:shadow-md'}`}
                                          >
-                                             <div className="w-12 h-12 bg-slate-100 rounded-lg flex items-center justify-center text-slate-400">
+                                             <div className="w-16 h-16 bg-slate-100 rounded-lg flex-shrink-0 overflow-hidden flex items-center justify-center text-slate-400">
                                                 {album.coverPhotoBaseUrl ? (
-                                                    <img src={`${album.coverPhotoBaseUrl}=w100-h100-c`} className="w-full h-full object-cover rounded-lg" alt=""/>
-                                                ) : <ImageIcon size={20}/>}
+                                                    <img src={`${album.coverPhotoBaseUrl}=w500-h500-c`} className="w-full h-full object-cover" alt=""/>
+                                                ) : <ImageIcon size={24}/>}
                                              </div>
-                                             <div className="overflow-hidden">
+                                             <div className="overflow-hidden flex-1">
                                                  <h5 className="font-bold text-slate-800 truncate text-sm">{album.title}</h5>
                                                  <p className="text-xs text-slate-500">{album.mediaItemsCount} items</p>
                                              </div>

@@ -19,6 +19,8 @@ const App: React.FC = () => {
   const [state, setState] = useState<AppState>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
+      const today = new Date().toISOString().split('T')[0];
+
       if (saved) {
         const parsed = JSON.parse(saved);
         // Ensure we always have at least one user if the saved array is empty (edge case fix)
@@ -26,8 +28,22 @@ const App: React.FC = () => {
           ? parsed.users 
           : INITIAL_USERS;
         
+        // DAILY RESET LOGIC
+        // Check if the last reset date is different from today
+        let currentChores = Array.isArray(parsed.chores) ? parsed.chores : INITIAL_CHORES;
+        let lastReset = parsed.lastResetDate;
+
+        if (lastReset !== today) {
+            console.log("New day detected! Resetting daily chores.");
+            currentChores = currentChores.map((c: any) => ({
+                ...c,
+                completedBy: [] // Clear completion status for the new day
+            }));
+            lastReset = today;
+        }
+
         // MIGRATION: Fix old chores that might be missing the new fields
-        const safeChores = (Array.isArray(parsed.chores) ? parsed.chores : INITIAL_CHORES).map((c: any) => {
+        const safeChores = currentChores.map((c: any) => {
            if (!c.assignments || !Array.isArray(c.assignments)) {
              const assignments: ChoreAssignment[] = [];
              if (c.assignedTo) {
@@ -59,6 +75,8 @@ const App: React.FC = () => {
           photos: Array.isArray(parsed.photos) ? parsed.photos : INITIAL_PHOTOS,
           calendarSources: Array.isArray(parsed.calendarSources) ? parsed.calendarSources : INITIAL_CALENDAR_SOURCES,
           photoConfig: parsed.photoConfig || INITIAL_PHOTO_CONFIG,
+          googleAccessToken: parsed.googleAccessToken || undefined,
+          lastResetDate: lastReset
         };
       }
     } catch (e) {
@@ -77,6 +95,7 @@ const App: React.FC = () => {
       currentUser: null,
       calendarSources: INITIAL_CALENDAR_SOURCES,
       photoConfig: INITIAL_PHOTO_CONFIG,
+      lastResetDate: new Date().toISOString().split('T')[0]
     };
   });
 
@@ -142,8 +161,12 @@ const App: React.FC = () => {
           if (state.calendarSources.length > 0) {
               for (const source of state.calendarSources) {
                   const prefix = source.type === 'personal' ? `[${source.ownerName}]` : '';
-                  const fetched = await fetchGoogleCalendarEvents(source.accessToken, source.googleCalendarId, source.color, prefix);
-                  allEvents = [...allEvents, ...fetched];
+                  // Use source token if available, fallback to main token
+                  const token = source.accessToken || state.googleAccessToken;
+                  if (token) {
+                    const fetched = await fetchGoogleCalendarEvents(token, source.googleCalendarId, source.color, prefix);
+                    allEvents = [...allEvents, ...fetched];
+                  }
               }
               // Update state with new events if we got any (avoids wiping local state on network fail)
               if (allEvents.length > 0) {
@@ -152,8 +175,9 @@ const App: React.FC = () => {
           }
 
           // 2. Fetch Photos
-          if (state.photoConfig.accessToken && state.photoConfig.albumId) {
-              const fetchedPhotos = await fetchPhotosFromAlbum(state.photoConfig.accessToken, state.photoConfig.albumId);
+          const photoToken = state.photoConfig.accessToken || state.googleAccessToken;
+          if (photoToken && state.photoConfig.albumId) {
+              const fetchedPhotos = await fetchPhotosFromAlbum(photoToken, state.photoConfig.albumId);
               if (fetchedPhotos.length > 0) {
                   setState(prev => ({ ...prev, photos: fetchedPhotos }));
               }
@@ -161,12 +185,14 @@ const App: React.FC = () => {
       };
 
       // Initial Sync
-      syncData();
+      if (state.googleAccessToken) {
+        syncData();
+      }
       
       // Poll every 15 minutes
       const interval = setInterval(syncData, 15 * 60 * 1000);
       return () => clearInterval(interval);
-  }, [state.calendarSources, state.photoConfig]);
+  }, [state.calendarSources, state.photoConfig, state.googleAccessToken]);
 
 
   const handleLogin = (user: User) => {
@@ -231,6 +257,10 @@ const App: React.FC = () => {
 
   const handleSetPhotoConfig = (config: PhotoConfig) => {
       setState(prev => ({ ...prev, photoConfig: config }));
+  };
+
+  const handleSetGoogleToken = (token: string) => {
+      setState(prev => ({ ...prev, googleAccessToken: token }));
   };
 
   // Shared Reward Redemption Logic
@@ -475,6 +505,7 @@ const App: React.FC = () => {
               calendarSources={state.calendarSources}
               photoConfig={state.photoConfig}
               currentUser={state.currentUser}
+              googleAccessToken={state.googleAccessToken}
               onAddChore={handleAddChore}
               onUpdateChore={handleUpdateChore}
               onDeleteChore={handleDeleteChore}
@@ -489,6 +520,7 @@ const App: React.FC = () => {
               onAddCalendarSource={handleAddCalendarSource}
               onRemoveCalendarSource={handleRemoveCalendarSource}
               onSetPhotoConfig={handleSetPhotoConfig}
+              onSetGoogleToken={handleSetGoogleToken}
            />
          ) : (
            <KidDashboard 

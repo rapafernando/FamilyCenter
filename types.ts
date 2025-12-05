@@ -113,4 +113,6 @@ export interface AppState {
   meals: Meal[];
   photos: Photo[];
   currentUser: User | null;
+  googleAccessToken?: string; // Persist auth token
+  lastResetDate?: string; // Track the last time daily chores were reset (YYYY-MM-DD)
 }
