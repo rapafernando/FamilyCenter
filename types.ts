@@ -15,6 +15,15 @@ export interface User {
   email?: string; // For password reset
 }
 
+export interface SystemAdminUser {
+  id: string;
+  name: string;
+  email: string;
+  role: 'SUPER_ADMIN' | 'SUPPORT_AGENT';
+  createdAt: string;
+  lastLogin?: string;
+}
+
 export interface ChoreAssignment {
   userId: string;
   points: number;
@@ -102,6 +111,7 @@ export interface Photo {
 }
 
 export interface AppState {
+  id: string; // Unique Family ID (Tenant ID)
   familyName: string;
   users: User[];
   chores: Chore[];
@@ -115,4 +125,5 @@ export interface AppState {
   currentUser: User | null;
   googleAccessToken?: string; // Persist auth token
   lastResetDate?: string; // Track the last time daily chores were reset (YYYY-MM-DD)
+  createdAt: string;
 }

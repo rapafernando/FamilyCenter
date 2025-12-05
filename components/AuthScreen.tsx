@@ -1,14 +1,14 @@
 
 import React, { useState } from 'react';
 import { User, UserRole } from '../types';
-import { Lock, X, ChevronRight, KeyRound, Shield } from 'lucide-react';
+import { Lock, X, ChevronRight, KeyRound, LogOut } from 'lucide-react';
 
 interface AuthScreenProps {
   users: User[];
   onLogin: (user: User) => void;
   onCancel: () => void;
   onSetPin: (userId: string, pin: string) => void;
-  onAdminLogin?: () => void; // New prop
+  onAdminLogin?: () => void; // Used for "Exit Family" now
 }
 
 type AuthMode = 'select' | 'enter_pin' | 'set_pin' | 'forgot_pin' | 'reset_confirm';
@@ -119,11 +119,11 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ users, onLogin, onCancel, onSet
             </button>
           ))}
         </div>
-        {/* Admin Link */}
+        {/* Switch Account Link */}
         {onAdminLogin && (
             <div className="absolute bottom-6">
-                <button onClick={onAdminLogin} className="flex items-center gap-2 text-xs font-bold text-slate-300 hover:text-slate-500 uppercase tracking-widest transition-colors">
-                    <Shield size={12}/> System Admin
+                <button onClick={onAdminLogin} className="flex items-center gap-2 text-xs font-bold text-slate-300 hover:text-red-400 uppercase tracking-widest transition-colors">
+                    <LogOut size={12}/> Exit Family / Switch Account
                 </button>
             </div>
         )}
