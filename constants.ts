@@ -2,18 +2,8 @@
 import { User, Chore, Reward, CalendarEvent, UserRole, Meal, Photo, ChoreLog, CalendarSource, PhotoConfig } from './types';
 
 // Default initial state for a fresh app
-// We need at least one parent to allow login and configuration
-export const INITIAL_USERS: User[] = [
-  {
-    id: 'p1',
-    name: 'Parent',
-    avatar: 'https://ui-avatars.com/api/?name=Parent&background=0D8ABC&color=fff',
-    role: UserRole.PARENT,
-    points: 0,
-    totalPointsEarned: 0,
-    email: 'parent@example.com' // Default email for resets
-  }
-];
+// Started empty to trigger the Setup/SSO flow
+export const INITIAL_USERS: User[] = [];
 
 export const INITIAL_CHORES: Chore[] = [];
 export const INITIAL_CHORE_LOGS: ChoreLog[] = []; // New empty log

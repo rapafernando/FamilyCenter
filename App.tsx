@@ -6,10 +6,11 @@ import AuthScreen from './components/AuthScreen';
 import ParentPortal from './components/ParentPortal';
 import KidDashboard from './components/KidDashboard';
 import FamilyWallDashboard from './components/FamilyWallDashboard';
+import SetupScreen from './components/SetupScreen'; // Import SetupScreen
 import { LogOut } from 'lucide-react';
 import { fetchGoogleCalendarEvents, fetchPhotosFromAlbum } from './services/googleService';
 
-type ViewState = 'WALL' | 'AUTH' | 'USER_SESSION';
+type ViewState = 'WALL' | 'AUTH' | 'USER_SESSION' | 'SETUP';
 
 const STORAGE_KEY = 'familySyncData';
 const IDLE_TIMEOUT_MS = 300000; // 5 Minutes
@@ -23,8 +24,8 @@ const App: React.FC = () => {
 
       if (saved) {
         const parsed = JSON.parse(saved);
-        // Ensure we always have at least one user if the saved array is empty (edge case fix)
-        const safeUsers = (parsed.users && Array.isArray(parsed.users) && parsed.users.length > 0) 
+        // Ensure we handle empty users by defaulting to INITIAL_USERS (which is now empty, triggering Setup)
+        const safeUsers = (parsed.users && Array.isArray(parsed.users)) 
           ? parsed.users 
           : INITIAL_USERS;
         
@@ -99,7 +100,12 @@ const App: React.FC = () => {
     };
   });
 
-  const [view, setView] = useState<ViewState>('WALL'); // Default to Wall
+  // Determine initial view based on user existence
+  const [view, setView] = useState<ViewState>(() => {
+     if (state.users.length === 0) return 'SETUP';
+     return 'WALL';
+  });
+
   const [wallActiveTab, setWallActiveTab] = useState<'calendar' | 'chores' | 'meals' | 'photos' | undefined>(undefined);
   
   // Idle Timer Logic
@@ -108,9 +114,9 @@ const App: React.FC = () => {
   const resetIdleTimer = useCallback(() => {
     if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
     
-    // Only run idle logic if we aren't already in slideshow mode or auth mode
+    // Only run idle logic if we aren't already in slideshow mode or auth mode or setup
     // And if we have photos to show
-    if (view !== 'AUTH' && state.photos.length > 0) {
+    if (view !== 'AUTH' && view !== 'SETUP' && state.photos.length > 0) {
         idleTimerRef.current = setTimeout(() => {
             setView('WALL');
             setWallActiveTab('photos');
@@ -211,6 +217,29 @@ const App: React.FC = () => {
 
   const handleCloseAuth = () => {
     setView('WALL');
+  };
+  
+  // New Setup Handler
+  const handleSetupComplete = (googleProfile: any, token: string) => {
+     const newAdminUser: User = {
+         id: `u-${Date.now()}`,
+         name: googleProfile.name || 'Admin',
+         avatar: googleProfile.picture || `https://ui-avatars.com/api/?name=${encodeURIComponent(googleProfile.name)}`,
+         email: googleProfile.email,
+         role: UserRole.PARENT,
+         points: 0,
+         totalPointsEarned: 0
+     };
+     
+     setState(prev => ({
+         ...prev,
+         users: [newAdminUser],
+         currentUser: newAdminUser,
+         googleAccessToken: token,
+         familyName: googleProfile.family_name ? `${googleProfile.family_name} Family` : 'My Family'
+     }));
+     
+     setView('USER_SESSION'); // Take them directly to dashboard to configure kids
   };
 
   const handleSetPin = (userId: string, pin: string) => {
@@ -453,6 +482,10 @@ const App: React.FC = () => {
   };
 
   // --- Render ---
+  
+  if (view === 'SETUP') {
+      return <SetupScreen onSetupComplete={handleSetupComplete} />;
+  }
 
   if (view === 'AUTH') {
     return (
