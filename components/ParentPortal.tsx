@@ -2,12 +2,11 @@
 // ... imports remain the same
 import React, { useState, useEffect } from 'react';
 import { User, Chore, Reward, UserRole, TimeOfDay, ChoreFrequency, ChoreLog, CalendarSource, PhotoConfig } from '../types';
-import { Calendar as CalIcon, CheckSquare, Settings, Plus, Trash2, UserPlus, Save, Clock, Repeat, MoreVertical, Edit, Copy, BarChart2, TrendingUp, History, Gift, Users, Link, Image as ImageIcon, RefreshCw, CheckCircle2 } from 'lucide-react';
+import { Calendar as CalIcon, CheckSquare, Settings, Plus, Trash2, UserPlus, Save, Clock, Repeat, MoreVertical, Edit, Copy, BarChart2, TrendingUp, History, Gift, Users, Link, Image as ImageIcon, RefreshCw, CheckCircle2, Loader2 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line } from 'recharts';
 import { initGoogleClient, signInWithGoogle, fetchCalendarList, fetchAlbums } from '../services/googleService';
 
 interface ParentPortalProps {
-// ... props remain the same
   familyName: string;
   users: User[];
   chores: Chore[];
@@ -96,6 +95,10 @@ const ParentPortal: React.FC<ParentPortalProps> = ({
   // Integration State
   const [fetchedCalendars, setFetchedCalendars] = useState<any[]>([]);
   const [fetchedAlbums, setFetchedAlbums] = useState<any[]>([]);
+  
+  // Loading States for Refresh
+  const [refreshingCal, setRefreshingCal] = useState(false);
+  const [refreshingPhotos, setRefreshingPhotos] = useState(false);
   
   // Initialize 'isGoogleLinked' from props so it persists
   const isGoogleLinked = !!googleAccessToken;
@@ -276,6 +279,30 @@ const ParentPortal: React.FC<ParentPortalProps> = ({
           }
       });
       signInWithGoogle();
+  };
+
+  const handleRefreshCalendars = async () => {
+      if (!googleAccessToken) return;
+      setRefreshingCal(true);
+      try {
+          const cals = await fetchCalendarList(googleAccessToken);
+          setFetchedCalendars(cals);
+      } catch (e) {
+          console.error(e);
+      }
+      setRefreshingCal(false);
+  };
+
+  const handleRefreshAlbums = async () => {
+      if (!googleAccessToken) return;
+      setRefreshingPhotos(true);
+      try {
+          const albums = await fetchAlbums(googleAccessToken);
+          setFetchedAlbums(albums);
+      } catch (e) {
+          console.error(e);
+      }
+      setRefreshingPhotos(false);
   };
 
   const handleSyncCalendar = (cal: any) => {
@@ -599,9 +626,19 @@ const ParentPortal: React.FC<ParentPortalProps> = ({
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-in fade-in slide-in-from-bottom-4">
                         {/* Calendars Sync Section */}
                          <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col">
-                             <div className="mb-4">
-                                <h4 className="font-bold text-lg text-slate-800 flex items-center gap-2"><CalIcon size={20} className="text-blue-500"/> Calendar Sync</h4>
-                                <p className="text-sm text-slate-500">Choose calendars to display on the family wall.</p>
+                             <div className="mb-4 flex items-center justify-between">
+                                <div>
+                                    <h4 className="font-bold text-lg text-slate-800 flex items-center gap-2"><CalIcon size={20} className="text-blue-500"/> Calendar Sync</h4>
+                                    <p className="text-sm text-slate-500">Choose calendars to display.</p>
+                                </div>
+                                <button 
+                                    onClick={handleRefreshCalendars} 
+                                    disabled={refreshingCal}
+                                    className="text-slate-400 hover:text-blue-600 disabled:opacity-50 transition-colors p-2 rounded-full hover:bg-slate-50"
+                                    title="Refresh Calendars"
+                                >
+                                    {refreshingCal ? <Loader2 size={20} className="animate-spin text-blue-500"/> : <RefreshCw size={20}/>}
+                                </button>
                              </div>
                              
                              <div className="bg-slate-50 p-4 rounded-xl space-y-3 mb-6">
@@ -648,7 +685,9 @@ const ParentPortal: React.FC<ParentPortalProps> = ({
                                          })}
                                      </div>
                                  ) : (
-                                     <div className="text-center py-4 text-slate-400 text-sm italic">No calendars found.</div>
+                                     <div className="text-center py-4 text-slate-400 text-sm italic">
+                                         {refreshingCal ? 'Loading calendars...' : 'No calendars found.'}
+                                     </div>
                                  )}
                              </div>
                              
@@ -673,9 +712,19 @@ const ParentPortal: React.FC<ParentPortalProps> = ({
 
                          {/* Photos Sync Section */}
                          <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col">
-                             <div className="mb-4">
-                                <h4 className="font-bold text-lg text-slate-800 flex items-center gap-2"><ImageIcon size={20} className="text-purple-500"/> Photo Frame</h4>
-                                <p className="text-sm text-slate-500">Select an album for the idle screensaver.</p>
+                             <div className="mb-4 flex items-center justify-between">
+                                <div>
+                                    <h4 className="font-bold text-lg text-slate-800 flex items-center gap-2"><ImageIcon size={20} className="text-purple-500"/> Photo Frame</h4>
+                                    <p className="text-sm text-slate-500">Select an album for the idle screensaver.</p>
+                                </div>
+                                <button 
+                                    onClick={handleRefreshAlbums} 
+                                    disabled={refreshingPhotos}
+                                    className="text-slate-400 hover:text-purple-600 disabled:opacity-50 transition-colors p-2 rounded-full hover:bg-slate-50"
+                                    title="Refresh Albums"
+                                >
+                                    {refreshingPhotos ? <Loader2 size={20} className="animate-spin text-purple-500"/> : <RefreshCw size={20}/>}
+                                </button>
                              </div>
                              
                              {fetchedAlbums.length > 0 ? (
@@ -701,7 +750,7 @@ const ParentPortal: React.FC<ParentPortalProps> = ({
                                  </div>
                              ) : (
                                  <div className="text-center py-8 text-slate-400 text-sm italic bg-slate-50 rounded-xl border border-dashed border-slate-200">
-                                     No albums found in this Google Photos account.
+                                     {refreshingPhotos ? 'Loading albums...' : 'No albums found in this Google Photos account.'}
                                  </div>
                              )}
                              
