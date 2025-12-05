@@ -1,4 +1,3 @@
-
 import { GoogleGenAI } from "@google/genai";
 
 // Access API key safely. 
@@ -25,10 +24,13 @@ export const generateChoreIcon = async (choreTitle: string): Promise<string> => 
     // We want the AI to return raw SVG code.
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
-      contents: `Create a simple, modern, line-art SVG icon for a chore titled "${choreTitle}". 
-      Do not include \`\`\`xml or \`\`\`svg markdown tags. Return ONLY the raw <svg>...</svg> string. 
-      The viewBox should be "0 0 24 24". Use 'stroke="currentColor"' and 'fill="none"'. 
-      Make it recognizable but simple suitable for a small dashboard icon.`,
+      contents: `Create a simple, bold, black outline SVG icon for a household chore titled "${choreTitle}". 
+      Style constraints: 
+      - Strictly minimalist line art (outline only). 
+      - No fill, no shading, no colors (use stroke="currentColor").
+      - Thick, clear strokes suitable for a small UI icon.
+      - ViewBox "0 0 24 24".
+      - Return ONLY the raw <svg>...</svg> string.`,
     });
 
     let svg = response.text || '';

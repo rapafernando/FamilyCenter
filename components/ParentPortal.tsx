@@ -1,7 +1,6 @@
-
 import React, { useState } from 'react';
 import { User, Chore, Reward, UserRole, TimeOfDay, ChoreFrequency } from '../types';
-import { Calendar as CalIcon, CheckSquare, Settings, Sparkles, Plus, Loader2, Trash2, UserPlus, Save, Clock, CalendarDays, Repeat } from 'lucide-react';
+import { Calendar as CalIcon, CheckSquare, Settings, Sparkles, Plus, Loader2, Trash2, UserPlus, Save, Clock, Repeat, MoreVertical, Edit, Copy } from 'lucide-react';
 import { generateChoreIcon } from '../services/geminiService';
 
 interface ParentPortalProps {
@@ -10,6 +9,7 @@ interface ParentPortalProps {
   chores: Chore[];
   rewards: Reward[];
   onAddChore: (chore: Omit<Chore, 'id'>) => void;
+  onUpdateChore: (chore: Chore) => void;
   onDeleteChore: (id: string) => void;
   onApproveReward: (id: string) => void;
   onUpdateFamilyName: (name: string) => void;
@@ -19,7 +19,7 @@ interface ParentPortalProps {
 
 const ParentPortal: React.FC<ParentPortalProps> = ({ 
   familyName, users, chores, rewards, 
-  onAddChore, onDeleteChore, onApproveReward, 
+  onAddChore, onUpdateChore, onDeleteChore, onApproveReward, 
   onUpdateFamilyName, onAddUser, onDeleteUser 
 }) => {
   const [activeTab, setActiveTab] = useState<'overview' | 'chores' | 'rewards' | 'settings'>('overview');
@@ -31,6 +31,8 @@ const ParentPortal: React.FC<ParentPortalProps> = ({
 
   // New Chore Form State
   const [isCreatingChore, setIsCreatingChore] = useState(false);
+  const [editingChoreId, setEditingChoreId] = useState<string | null>(null);
+  
   const [choreTitle, setChoreTitle] = useState('');
   const [choreDesc, setChoreDesc] = useState('');
   const [selectedKids, setSelectedKids] = useState<Set<string>>(new Set());
@@ -39,6 +41,7 @@ const ParentPortal: React.FC<ParentPortalProps> = ({
   const [freqConfig, setFreqConfig] = useState('all'); // all, weekdays, monday, 1, etc.
   const [timeOfDay, setTimeOfDay] = useState<TimeOfDay>('all_day');
   const [isGeneratingIcon, setIsGeneratingIcon] = useState(false);
+  const [activeMenuChoreId, setActiveMenuChoreId] = useState<string | null>(null);
 
   const kids = users.filter(u => u.role === UserRole.KID);
   const wishlistItems = rewards.filter(r => r.requestedBy && !r.approved);
@@ -69,22 +72,85 @@ const ParentPortal: React.FC<ParentPortalProps> = ({
       setKidPoints({ ...kidPoints, [kidId]: points });
   };
 
+  const resetForm = () => {
+      setChoreTitle('');
+      setChoreDesc('');
+      setSelectedKids(new Set());
+      setKidPoints({});
+      setFrequency('daily');
+      setFreqConfig('all');
+      setTimeOfDay('all_day');
+      setEditingChoreId(null);
+      setIsCreatingChore(false);
+  };
+
+  const handleEditChore = (chore: Chore) => {
+      setEditingChoreId(chore.id);
+      setChoreTitle(chore.title);
+      setChoreDesc(chore.description || '');
+      setFrequency(chore.frequency);
+      setFreqConfig(chore.frequencyConfig);
+      setTimeOfDay(chore.timeOfDay);
+      
+      const kidsSet = new Set<string>();
+      const pointsMap: Record<string, number> = {};
+      
+      chore.assignments.forEach(a => {
+          kidsSet.add(a.userId);
+          pointsMap[a.userId] = a.points;
+      });
+      
+      setSelectedKids(kidsSet);
+      setKidPoints(pointsMap);
+      
+      setIsCreatingChore(true);
+      setActiveMenuChoreId(null);
+  };
+
+  const handleDuplicateChore = (chore: Chore) => {
+      onAddChore({
+          ...chore,
+          title: `${chore.title} (Copy)`,
+          completedBy: []
+      });
+      setActiveMenuChoreId(null);
+  };
+
   const handleSaveChore = async () => {
       if (!choreTitle.trim() || selectedKids.size === 0) {
           alert("Please enter a title and select at least one kid.");
           return;
       }
 
-      setIsGeneratingIcon(true);
-      const iconSvg = await generateChoreIcon(choreTitle);
-      setIsGeneratingIcon(false);
+      let iconSvg = '';
+      
+      // Only generate new icon if title changed or it's a new chore without a pre-existing icon
+      // For editing, we check if title is different from existing, or if we force regeneration
+      // For simplicity here, we always regenerate on new, and regenerate on edit if we want, 
+      // but let's assume we keep old icon if editing unless we want to change it.
+      // To keep it simple: always generate on create. On edit, if title changed significantly? 
+      // Let's just generate on create, and reuse on edit if not fetched.
+      
+      // However, the state doesn't hold the old icon in form. 
+      // Let's re-generate if it's new, OR reuse if editing and we want to preserve?
+      // Actually, let's just generate if creating. If editing, we find original chore.
+      
+      const existingChore = chores.find(c => c.id === editingChoreId);
+      
+      if (editingChoreId && existingChore && existingChore.title === choreTitle) {
+           iconSvg = existingChore.icon;
+      } else {
+           setIsGeneratingIcon(true);
+           iconSvg = await generateChoreIcon(choreTitle);
+           setIsGeneratingIcon(false);
+      }
 
       const assignments = Array.from(selectedKids).map(kidId => ({
           userId: kidId,
           points: kidPoints[kidId] || 0
       }));
 
-      onAddChore({
+      const choreData = {
           title: choreTitle,
           description: choreDesc,
           assignments,
@@ -94,16 +160,19 @@ const ParentPortal: React.FC<ParentPortalProps> = ({
           completedBy: [],
           dueDate: new Date().toISOString(),
           icon: iconSvg
-      });
+      };
 
-      // Reset form
-      setChoreTitle('');
-      setChoreDesc('');
-      setSelectedKids(new Set());
-      setKidPoints({});
-      setFrequency('daily');
-      setFreqConfig('all');
-      setIsCreatingChore(false);
+      if (editingChoreId && existingChore) {
+          onUpdateChore({
+              ...existingChore,
+              ...choreData,
+              icon: iconSvg || existingChore.icon // Fallback
+          });
+      } else {
+          onAddChore(choreData);
+      }
+
+      resetForm();
   };
 
   // Helper to render frequency config inputs
@@ -246,16 +315,21 @@ const ParentPortal: React.FC<ParentPortalProps> = ({
                     <p className="text-slate-500">Create tasks and assign them to your kids.</p>
                 </div>
                 <button 
-                    onClick={() => setIsCreatingChore(!isCreatingChore)}
+                    onClick={() => { resetForm(); setIsCreatingChore(!isCreatingChore); }}
                     className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl font-bold flex items-center gap-2 transition-colors"
                 >
                     {isCreatingChore ? 'Cancel' : <><Plus size={20} /> Add New Chore</>}
                 </button>
              </div>
 
-             {/* Add Chore Form */}
+             {/* Add/Edit Chore Form */}
              {isCreatingChore && (
                  <div className="bg-white p-8 rounded-2xl shadow-lg border border-slate-200 animate-in fade-in slide-in-from-top-4">
+                     <div className="flex justify-between items-center mb-6">
+                        <h3 className="text-lg font-bold text-slate-800">
+                            {editingChoreId ? 'Edit Chore' : 'Create New Chore'}
+                        </h3>
+                     </div>
                      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                          {/* Left Column: Basic Info */}
                          <div className="space-y-6">
@@ -360,7 +434,7 @@ const ParentPortal: React.FC<ParentPortalProps> = ({
                      
                      <div className="mt-8 flex justify-end gap-4 border-t border-slate-100 pt-6">
                          <button 
-                             onClick={() => setIsCreatingChore(false)}
+                             onClick={resetForm}
                              className="px-6 py-2.5 rounded-xl font-bold text-slate-500 hover:bg-slate-100"
                          >
                              Cancel
@@ -371,43 +445,43 @@ const ParentPortal: React.FC<ParentPortalProps> = ({
                              className="px-8 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl flex items-center gap-2 disabled:opacity-70"
                          >
                              {isGeneratingIcon ? <Loader2 className="animate-spin" /> : <Save size={20} />}
-                             Save Chore
+                             {editingChoreId ? 'Update Chore' : 'Save Chore'}
                          </button>
                      </div>
                  </div>
              )}
 
              {/* Existing Chores List */}
-             <div className="bg-white p-6 rounded-2xl border border-slate-200">
+             <div className="bg-white p-6 rounded-2xl border border-slate-200 min-h-[400px]">
                 <h3 className="text-xl font-bold mb-6 text-slate-800">Active Chores List</h3>
-                <div className="overflow-x-auto">
-                   <table className="w-full text-left">
+                <div className="overflow-visible"> 
+                   <table className="w-full text-left border-collapse">
                       <thead>
                         <tr className="border-b border-slate-100">
-                           <th className="pb-3 text-slate-400 font-medium text-sm pl-4">Icon</th>
+                           <th className="pb-3 text-slate-400 font-medium text-sm pl-4 w-16">Icon</th>
                            <th className="pb-3 text-slate-400 font-medium text-sm">Chore</th>
                            <th className="pb-3 text-slate-400 font-medium text-sm">Frequency</th>
                            <th className="pb-3 text-slate-400 font-medium text-sm">Assigned To</th>
-                           <th className="pb-3 text-slate-400 font-medium text-sm text-right pr-4">Action</th>
+                           <th className="pb-3 text-slate-400 font-medium text-sm text-right pr-4 w-16">Action</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-50">
                          {chores.map(chore => (
                            <tr key={chore.id} className="group hover:bg-slate-50">
-                              <td className="py-4 pl-4">
+                              <td className="py-4 pl-4 align-top">
                                   <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-lg flex items-center justify-center p-2" dangerouslySetInnerHTML={{ __html: chore.icon }} />
                               </td>
-                              <td className="py-4 font-medium text-slate-700">
+                              <td className="py-4 font-medium text-slate-700 align-top">
                                   {chore.title}
                                   <div className="text-xs text-slate-400 capitalize">{chore.timeOfDay.replace('_', ' ')}</div>
                               </td>
-                              <td className="py-4 text-slate-600 text-sm">
+                              <td className="py-4 text-slate-600 text-sm align-top">
                                   <span className="capitalize font-medium">{chore.frequency}</span>
                                   <span className="text-slate-400 block text-xs">
                                       {chore.frequencyConfig === 'all' ? 'Every Day' : chore.frequencyConfig}
                                   </span>
                               </td>
-                              <td className="py-4">
+                              <td className="py-4 align-top">
                                 <div className="flex flex-col gap-1">
                                    {chore.assignments.map(a => {
                                        const user = users.find(u => u.id === a.userId);
@@ -421,13 +495,37 @@ const ParentPortal: React.FC<ParentPortalProps> = ({
                                    })}
                                 </div>
                               </td>
-                              <td className="py-4 text-right pr-4">
+                              <td className="py-4 text-right pr-4 align-top relative">
                                 <button 
-                                  onClick={() => onDeleteChore(chore.id)}
-                                  className="text-slate-300 hover:text-red-500 transition-colors p-2"
+                                  onClick={() => setActiveMenuChoreId(activeMenuChoreId === chore.id ? null : chore.id)}
+                                  className={`p-2 rounded-lg transition-colors ${activeMenuChoreId === chore.id ? 'bg-blue-100 text-blue-600' : 'text-slate-300 hover:text-slate-600 hover:bg-slate-100'}`}
                                 >
-                                  <Trash2 size={18} />
+                                  <MoreVertical size={18} />
                                 </button>
+                                
+                                {/* Dropdown Menu */}
+                                {activeMenuChoreId === chore.id && (
+                                    <div className="absolute right-8 top-12 w-48 bg-white rounded-xl shadow-xl border border-slate-100 z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                                        <button 
+                                            onClick={() => handleEditChore(chore)}
+                                            className="w-full text-left px-4 py-3 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-3 border-b border-slate-50"
+                                        >
+                                            <Edit size={16} className="text-blue-500"/> Edit Task
+                                        </button>
+                                        <button 
+                                            onClick={() => handleDuplicateChore(chore)}
+                                            className="w-full text-left px-4 py-3 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-3 border-b border-slate-50"
+                                        >
+                                            <Copy size={16} className="text-purple-500"/> Duplicate
+                                        </button>
+                                        <button 
+                                            onClick={() => onDeleteChore(chore.id)}
+                                            className="w-full text-left px-4 py-3 text-sm text-red-600 hover:bg-red-50 flex items-center gap-3"
+                                        >
+                                            <Trash2 size={16} /> Delete
+                                        </button>
+                                    </div>
+                                )}
                               </td>
                            </tr>
                          ))}

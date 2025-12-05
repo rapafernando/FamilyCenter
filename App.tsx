@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { User, Chore, Reward, UserRole, AppState, Meal, MealType, ChoreAssignment } from './types';
 import { INITIAL_USERS, INITIAL_CHORES, INITIAL_REWARDS, INITIAL_EVENTS, INITIAL_MEALS, INITIAL_PHOTOS } from './constants';
@@ -179,6 +178,13 @@ const App: React.FC = () => {
      }));
   };
 
+  const handleUpdateChore = (updatedChore: Chore) => {
+    setState(prev => ({
+      ...prev,
+      chores: prev.chores.map(c => c.id === updatedChore.id ? updatedChore : c)
+    }));
+  };
+
   const handleDeleteChore = (id: string) => {
     setState(prev => ({
       ...prev,
@@ -317,6 +323,7 @@ const App: React.FC = () => {
               chores={state.chores}
               rewards={state.rewards}
               onAddChore={handleAddChore}
+              onUpdateChore={handleUpdateChore}
               onDeleteChore={handleDeleteChore}
               onApproveReward={handleApproveReward}
               onUpdateFamilyName={handleUpdateFamilyName}
