@@ -4,7 +4,8 @@ import { User, CalendarEvent, Chore, Meal, MealType, Photo } from '../types';
 import { 
   Calendar, CheckSquare, Settings, Coffee, Utensils, 
   Image as ImageIcon, Moon, ChevronLeft, ChevronRight,
-  CloudSun, Clock, Play, Pause, RefreshCw, X, LogOut
+  CloudSun, Clock, Play, Pause, RefreshCw, X, LogOut,
+  Sparkles, PartyPopper, Sun, Sunrise, Sunset
 } from 'lucide-react';
 
 interface FamilyWallDashboardProps {
@@ -23,10 +24,53 @@ interface FamilyWallDashboardProps {
 
 type CalendarViewMode = 'day' | 'week' | 'month';
 
+// Helper to check if a chore is valid for today
+const isChoreScheduledForToday = (chore: Chore): boolean => {
+  const today = new Date();
+  const dayName = today.toLocaleDateString('en-US', { weekday: 'long' }); // "Monday"
+  const dayNum = today.getDate().toString(); // "15"
+  const dayIndex = today.getDay(); // 0 (Sun) - 6 (Sat)
+
+  if (chore.frequency === 'daily') {
+    if (chore.frequencyConfig === 'all') return true;
+    if (chore.frequencyConfig === 'weekdays') return dayIndex >= 1 && dayIndex <= 5;
+    return false;
+  }
+  
+  if (chore.frequency === 'weekly') {
+    // Check if config matches today's name (Case insensitive just to be safe)
+    return chore.frequencyConfig.toLowerCase() === dayName.toLowerCase();
+  }
+
+  if (chore.frequency === 'monthly') {
+    return chore.frequencyConfig === dayNum;
+  }
+
+  return false;
+};
+
+// CSS for Confetti Animation
+const ConfettiStyles = () => (
+  <style>{`
+    @keyframes bang {
+      from { transform: translate3d(0,0,0); opacity: 1; }
+      to { transform: translate3d(var(--x), var(--y), 0); opacity: 0; }
+    }
+    .confetti-piece {
+      position: absolute;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      animation: bang 1s ease-out forwards;
+      opacity: 0;
+    }
+  `}</style>
+);
+
 const FamilyWallDashboard: React.FC<FamilyWallDashboardProps> = ({ 
   familyName, users, events, chores, meals, photos, onSettingsClick, onToggleChore, onUpdateMeal, currentUser, onLogout
 }) => {
-  const [activeTab, setActiveTab] = useState<'calendar' | 'tasks' | 'meals' | 'photos'>('calendar');
+  const [activeTab, setActiveTab] = useState<'calendar' | 'chores' | 'meals' | 'photos'>('calendar');
   const [currentTime, setCurrentTime] = useState(new Date());
   
   // Calendar State
@@ -38,6 +82,10 @@ const FamilyWallDashboard: React.FC<FamilyWallDashboardProps> = ({
   const [isPlaying, setIsPlaying] = useState(true);
   const [isSynced, setIsSynced] = useState(true);
   const [showSyncModal, setShowSyncModal] = useState(false);
+
+  // Chore Completion Interaction State
+  const [selectedChore, setSelectedChore] = useState<Chore | null>(null);
+  const [showConfetti, setShowConfetti] = useState(false);
 
   // Clock ticker
   useEffect(() => {
@@ -162,11 +210,40 @@ const FamilyWallDashboard: React.FC<FamilyWallDashboardProps> = ({
     }, 1500);
   };
 
+  const handleChoreClick = (chore: Chore, kidId: string) => {
+      // Only allow interaction if current user is null (kiosk mode) or the kid themselves
+      if (currentUser && currentUser.id !== kidId) return;
+      
+      const isCompleted = chore.completedBy.includes(kidId);
+      if (isCompleted) {
+          // If already done, toggle off immediately without fanfare
+          onToggleChore(chore.id);
+      } else {
+          // If not done, show celebration modal
+          setSelectedChore(chore);
+      }
+  };
+
+  const confirmChoreCompletion = () => {
+      if (!selectedChore) return;
+      
+      onToggleChore(selectedChore.id);
+      setShowConfetti(true);
+      
+      // Cleanup
+      setTimeout(() => {
+          setShowConfetti(false);
+          setSelectedChore(null);
+      }, 2500);
+  };
+
   const getDayName = (date: Date) => date.toLocaleDateString('en-US', { weekday: 'short' });
   const getDateNum = (date: Date) => date.getDate();
 
   return (
     <div className="flex h-screen bg-white font-sans">
+      <ConfettiStyles />
+      
       {/* Sidebar */}
       <div className="w-24 bg-white border-r border-slate-200 flex flex-col items-center py-6 gap-8 z-10 shadow-[4px_0_24px_rgba(0,0,0,0.02)]">
         <div className="mb-2">
@@ -177,7 +254,7 @@ const FamilyWallDashboard: React.FC<FamilyWallDashboardProps> = ({
 
         <nav className="flex-1 flex flex-col gap-6 w-full px-2">
           <NavButton icon={<Calendar size={24} />} label="Calendar" active={activeTab === 'calendar'} onClick={() => setActiveTab('calendar')} />
-          <NavButton icon={<CheckSquare size={24} />} label="Tasks" active={activeTab === 'tasks'} onClick={() => setActiveTab('tasks')} />
+          <NavButton icon={<CheckSquare size={24} />} label="Chores" active={activeTab === 'chores'} onClick={() => setActiveTab('chores')} />
           <NavButton icon={<Utensils size={24} />} label="Meals" active={activeTab === 'meals'} onClick={() => setActiveTab('meals')} />
           <NavButton icon={<ImageIcon size={24} />} label="Photos" active={activeTab === 'photos'} onClick={() => setActiveTab('photos')} />
         </nav>
@@ -207,7 +284,7 @@ const FamilyWallDashboard: React.FC<FamilyWallDashboardProps> = ({
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col overflow-hidden bg-slate-50/50">
+      <div className="flex-1 flex flex-col overflow-hidden bg-slate-50/50 relative">
         
         {/* Universal Header (Hidden on Photos mode) */}
         {activeTab !== 'photos' && (
@@ -360,47 +437,124 @@ const FamilyWallDashboard: React.FC<FamilyWallDashboardProps> = ({
           </div>
         )}
 
-        {/* Tasks Summary View */}
-        {activeTab === 'tasks' && (
-           <div className="flex-1 overflow-y-auto p-8 max-w-5xl mx-auto w-full">
-              <h2 className="text-3xl font-serif text-slate-800 mb-8">Today's Chores</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {users.filter(u => u.role === 'KID').map(kid => (
-                   <div key={kid.id} className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-                      <div className="flex items-center gap-4 mb-6 pb-4 border-b border-slate-100">
-                         <img src={kid.avatar} className="w-12 h-12 rounded-full" alt={kid.name}/>
-                         <div>
-                            <h3 className="font-bold text-lg text-slate-800">{kid.name}</h3>
-                            <p className="text-slate-500 text-sm">{kid.points} points available</p>
+        {/* Chores Summary View */}
+        {activeTab === 'chores' && (
+           <div className="flex-1 overflow-y-auto p-8 max-w-7xl mx-auto w-full">
+              <h2 className="text-3xl font-serif text-slate-800 mb-8 flex items-center gap-3">
+                  <Sparkles className="text-yellow-500" /> Today's Chores
+              </h2>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                {users.filter(u => u.role === 'KID').map(kid => {
+                   // Filter chores for this kid AND for today
+                   const todaysChores = chores.filter(c => 
+                       c.assignments.some(a => a.userId === kid.id) && isChoreScheduledForToday(c)
+                   );
+                   
+                   const completedCount = todaysChores.filter(c => c.completedBy.includes(kid.id)).length;
+                   const totalCount = todaysChores.length;
+                   const progress = totalCount === 0 ? 0 : (completedCount / totalCount) * 100;
+
+                   // Group by time of day
+                   const groupedChores = {
+                       morning: todaysChores.filter(c => c.timeOfDay === 'morning'),
+                       afternoon: todaysChores.filter(c => c.timeOfDay === 'afternoon'),
+                       evening: todaysChores.filter(c => c.timeOfDay === 'evening'),
+                       all_day: todaysChores.filter(c => c.timeOfDay === 'all_day')
+                   };
+
+                   return (
+                   <div key={kid.id} className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-full">
+                      {/* Kid Header with Counter */}
+                      <div className="p-6 border-b border-slate-100 bg-slate-50/50">
+                         <div className="flex items-center justify-between mb-4">
+                             <div className="flex items-center gap-4">
+                                <img src={kid.avatar} className="w-16 h-16 rounded-full border-4 border-white shadow-sm" alt={kid.name}/>
+                                <div>
+                                    <h3 className="font-bold text-xl text-slate-800">{kid.name}</h3>
+                                    <div className="flex items-center gap-2 mt-1">
+                                        <div className="bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full text-xs font-bold flex items-center gap-1">
+                                            <Sparkles size={10} /> {kid.points} pts
+                                        </div>
+                                    </div>
+                                </div>
+                             </div>
+                             <div className="text-right">
+                                 <span className="text-3xl font-black text-slate-700">{completedCount}</span>
+                                 <span className="text-slate-400 text-lg font-medium">/{totalCount}</span>
+                             </div>
+                         </div>
+                         
+                         {/* Progress Bar */}
+                         <div className="h-3 w-full bg-slate-200 rounded-full overflow-hidden">
+                             <div 
+                                className="h-full bg-gradient-to-r from-blue-400 to-indigo-500 transition-all duration-1000 ease-out"
+                                style={{ width: `${progress}%` }}
+                             ></div>
                          </div>
                       </div>
-                      <div className="space-y-3">
-                         {chores.filter(c => c.assignments.some(a => a.userId === kid.id)).map(chore => {
-                           const isCompleted = chore.completedBy.includes(kid.id);
-                           const points = chore.assignments.find(a => a.userId === kid.id)?.points || 0;
-                           
-                           return (
-                             <div 
-                                key={chore.id} 
-                                onClick={() => currentUser?.id === kid.id ? onToggleChore(chore.id) : null}
-                                className={`flex items-center p-3 rounded-xl border transition-all ${isCompleted ? 'bg-green-50 border-green-200 opacity-60' : 'hover:bg-slate-50 border-slate-100'} ${currentUser?.id !== kid.id ? 'cursor-default' : 'cursor-pointer'}`}
-                             >
-                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center mr-3 ${isCompleted ? 'bg-green-500 text-white' : 'bg-blue-50 text-blue-500'}`}>
-                                   <div className="w-5 h-5" dangerouslySetInnerHTML={{ __html: chore.icon }} />
-                                </div>
-                                <div className="flex-1">
-                                   <p className={`font-medium ${isCompleted ? 'line-through text-slate-500' : 'text-slate-700'}`}>{chore.title}</p>
-                                </div>
-                                <span className="text-xs font-bold text-slate-400">+{points}</span>
-                             </div>
-                           );
-                         })}
-                         {chores.filter(c => c.assignments.some(a => a.userId === kid.id)).length === 0 && (
-                            <p className="text-center text-slate-400 py-4 italic">No chores assigned today!</p>
+
+                      {/* Chores List Grouped */}
+                      <div className="flex-1 p-6 space-y-6 overflow-y-auto">
+                         {todaysChores.length === 0 && (
+                            <div className="text-center py-10 text-slate-400">
+                                <p className="italic">No chores scheduled for today!</p>
+                            </div>
                          )}
+
+                         {Object.entries(groupedChores).map(([time, tasks]) => {
+                             if (tasks.length === 0) return null;
+                             
+                             let icon = <Clock size={16}/>;
+                             let label = "Anytime";
+                             let color = "text-slate-500";
+
+                             if (time === 'morning') { icon = <Sunrise size={16}/>; label = "Morning"; color = "text-orange-500"; }
+                             if (time === 'afternoon') { icon = <Sun size={16}/>; label = "Afternoon"; color = "text-yellow-600"; }
+                             if (time === 'evening') { icon = <Sunset size={16}/>; label = "Evening"; color = "text-indigo-500"; }
+
+                             return (
+                                 <div key={time}>
+                                     <h4 className={`text-xs font-bold uppercase tracking-wider mb-3 flex items-center gap-2 ${color}`}>
+                                         {icon} {label}
+                                     </h4>
+                                     <div className="space-y-3">
+                                         {tasks.map(chore => {
+                                             const isCompleted = chore.completedBy.includes(kid.id);
+                                             const points = chore.assignments.find(a => a.userId === kid.id)?.points || 0;
+                                             
+                                             return (
+                                                 <button 
+                                                    key={chore.id} 
+                                                    onClick={() => handleChoreClick(chore, kid.id)}
+                                                    disabled={currentUser && currentUser.id !== kid.id}
+                                                    className={`w-full text-left flex items-center p-3 rounded-2xl border transition-all group relative overflow-hidden
+                                                        ${isCompleted 
+                                                            ? 'bg-green-50 border-green-200 opacity-70' 
+                                                            : 'bg-white border-slate-100 hover:border-blue-300 hover:shadow-md hover:scale-[1.01]'
+                                                        }
+                                                        ${currentUser && currentUser.id !== kid.id ? 'cursor-default opacity-50' : 'cursor-pointer'}
+                                                    `}
+                                                 >
+                                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center mr-4 shadow-sm transition-colors ${isCompleted ? 'bg-green-500 text-white' : 'bg-blue-50 text-blue-600 group-hover:bg-blue-100'}`}>
+                                                       <div className="w-6 h-6" dangerouslySetInnerHTML={{ __html: chore.icon }} />
+                                                    </div>
+                                                    <div className="flex-1">
+                                                       <p className={`font-bold text-base ${isCompleted ? 'line-through text-slate-500' : 'text-slate-800'}`}>{chore.title}</p>
+                                                    </div>
+                                                    <span className={`text-xs font-bold px-2 py-1 rounded-lg ${isCompleted ? 'bg-green-200 text-green-800' : 'bg-slate-100 text-slate-500'}`}>
+                                                        +{points}
+                                                    </span>
+                                                 </button>
+                                             );
+                                         })}
+                                     </div>
+                                 </div>
+                             );
+                         })}
                       </div>
                    </div>
-                ))}
+                )})}
                 {users.filter(u => u.role === 'KID').length === 0 && (
                    <div className="col-span-2 text-center text-slate-400 py-10 bg-white rounded-2xl">
                      No kid accounts found. Please add them in Settings.
@@ -550,6 +704,56 @@ const FamilyWallDashboard: React.FC<FamilyWallDashboardProps> = ({
               )}
            </div>
         )}
+
+        {/* Task Completion Modal */}
+        {selectedChore && (
+            <div className="absolute inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+                <div className="bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl text-center transform scale-100 animate-in zoom-in-95 duration-200">
+                    <button onClick={() => setSelectedChore(null)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"><X/></button>
+                    <div className="w-20 h-20 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-inner">
+                        <div className="w-10 h-10" dangerouslySetInnerHTML={{ __html: selectedChore.icon }} />
+                    </div>
+                    <h3 className="text-2xl font-bold text-slate-800 mb-2">Finish {selectedChore.title}?</h3>
+                    <p className="text-slate-500 mb-8">Are you ready to mark this task as done and collect your points?</p>
+                    <button 
+                        onClick={confirmChoreCompletion}
+                        className="w-full py-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold text-lg rounded-2xl hover:scale-[1.02] active:scale-[0.98] transition-transform shadow-xl shadow-blue-200"
+                    >
+                        Yes, I did it! 🚀
+                    </button>
+                </div>
+            </div>
+        )}
+
+        {/* Confetti Overlay */}
+        {showConfetti && (
+            <div className="absolute inset-0 z-[60] pointer-events-none overflow-hidden flex items-center justify-center">
+                 <div className="absolute inset-0 flex items-center justify-center">
+                    <PartyPopper size={120} className="text-yellow-400 animate-bounce" />
+                 </div>
+                 {/* Generate 50 confetti pieces with random positions */}
+                 {Array.from({ length: 50 }).map((_, i) => {
+                     const x = (Math.random() - 0.5) * 800; // Spread X
+                     const y = (Math.random() - 0.5) * 800; // Spread Y
+                     const color = ['#ff0000', '#00ff00', '#0000ff', '#ffff00', '#ff00ff'][Math.floor(Math.random() * 5)];
+                     return (
+                         <div 
+                            key={i} 
+                            className="confetti-piece"
+                            style={{
+                                backgroundColor: color,
+                                left: '50%',
+                                top: '50%',
+                                '--x': `${x}px`,
+                                '--y': `${y}px`,
+                                animationDelay: `${Math.random() * 0.2}s`
+                            } as React.CSSProperties}
+                         />
+                     );
+                 })}
+            </div>
+        )}
+
       </div>
     </div>
   );
