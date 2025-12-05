@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { User, CalendarEvent, Chore, Meal, MealType, Photo } from '../types';
 import { 
@@ -374,22 +375,27 @@ const FamilyWallDashboard: React.FC<FamilyWallDashboardProps> = ({
                          </div>
                       </div>
                       <div className="space-y-3">
-                         {chores.filter(c => c.assignedTo === kid.id).map(chore => (
-                           <div 
-                              key={chore.id} 
-                              onClick={() => onToggleChore(chore.id)}
-                              className={`flex items-center p-3 rounded-xl border cursor-pointer transition-all ${chore.completed ? 'bg-green-50 border-green-200 opacity-60' : 'hover:bg-slate-50 border-slate-100'}`}
-                           >
-                              <div className={`w-6 h-6 rounded-full border-2 mr-4 flex items-center justify-center ${chore.completed ? 'bg-green-500 border-green-500' : 'border-slate-300'}`}>
-                                 {chore.completed && <CheckSquare size={14} className="text-white" />}
-                              </div>
-                              <div className="flex-1">
-                                 <p className={`font-medium ${chore.completed ? 'line-through text-slate-500' : 'text-slate-700'}`}>{chore.title}</p>
-                              </div>
-                              <span className="text-xs font-bold text-slate-400">+{chore.points}</span>
-                           </div>
-                         ))}
-                         {chores.filter(c => c.assignedTo === kid.id).length === 0 && (
+                         {chores.filter(c => c.assignments.some(a => a.userId === kid.id)).map(chore => {
+                           const isCompleted = chore.completedBy.includes(kid.id);
+                           const points = chore.assignments.find(a => a.userId === kid.id)?.points || 0;
+                           
+                           return (
+                             <div 
+                                key={chore.id} 
+                                onClick={() => currentUser?.id === kid.id ? onToggleChore(chore.id) : null}
+                                className={`flex items-center p-3 rounded-xl border transition-all ${isCompleted ? 'bg-green-50 border-green-200 opacity-60' : 'hover:bg-slate-50 border-slate-100'} ${currentUser?.id !== kid.id ? 'cursor-default' : 'cursor-pointer'}`}
+                             >
+                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center mr-3 ${isCompleted ? 'bg-green-500 text-white' : 'bg-blue-50 text-blue-500'}`}>
+                                   <div className="w-5 h-5" dangerouslySetInnerHTML={{ __html: chore.icon }} />
+                                </div>
+                                <div className="flex-1">
+                                   <p className={`font-medium ${isCompleted ? 'line-through text-slate-500' : 'text-slate-700'}`}>{chore.title}</p>
+                                </div>
+                                <span className="text-xs font-bold text-slate-400">+{points}</span>
+                             </div>
+                           );
+                         })}
+                         {chores.filter(c => c.assignments.some(a => a.userId === kid.id)).length === 0 && (
                             <p className="text-center text-slate-400 py-4 italic">No chores assigned today!</p>
                          )}
                       </div>

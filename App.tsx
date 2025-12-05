@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { User, Chore, Reward, UserRole, AppState, Meal, MealType } from './types';
 import { INITIAL_USERS, INITIAL_CHORES, INITIAL_REWARDS, INITIAL_EVENTS, INITIAL_MEALS, INITIAL_PHOTOS } from './constants';
@@ -20,18 +21,21 @@ const App: React.FC = () => {
       if (saved) {
         const parsed = JSON.parse(saved);
         // Ensure we always have at least one user if the saved array is empty (edge case fix)
-        const safeUsers = (parsed.users && parsed.users.length > 0) ? parsed.users : INITIAL_USERS;
+        const safeUsers = (parsed.users && Array.isArray(parsed.users) && parsed.users.length > 0) 
+          ? parsed.users 
+          : INITIAL_USERS;
         
         return {
           familyName: 'My Family',
           currentUser: null,
           ...parsed, // Override defaults with saved data
           users: safeUsers,
-          events: parsed.events || INITIAL_EVENTS,
-          chores: parsed.chores || INITIAL_CHORES,
-          meals: parsed.meals || INITIAL_MEALS,
-          rewards: parsed.rewards || INITIAL_REWARDS,
-          photos: parsed.photos || INITIAL_PHOTOS,
+          // Ensure arrays are initialized even if missing in old localstorage data
+          events: Array.isArray(parsed.events) ? parsed.events : INITIAL_EVENTS,
+          chores: Array.isArray(parsed.chores) ? parsed.chores : INITIAL_CHORES,
+          meals: Array.isArray(parsed.meals) ? parsed.meals : INITIAL_MEALS,
+          rewards: Array.isArray(parsed.rewards) ? parsed.rewards : INITIAL_REWARDS,
+          photos: Array.isArray(parsed.photos) ? parsed.photos : INITIAL_PHOTOS,
         };
       }
     } catch (e) {
@@ -85,7 +89,7 @@ const App: React.FC = () => {
       
       setState(prev => ({
         ...prev,
-        events: [...(prev.events || []), ...googleEvents],
+        events: [...(prev.events || []), ...(googleEvents || [])],
         users: prev.users.map(u => 
           u.id === prev.currentUser?.id && u.role === UserRole.PARENT
             ? { ...u, name: googleProfile.given_name || u.name, avatar: googleProfile.picture || u.avatar } 
@@ -103,29 +107,47 @@ const App: React.FC = () => {
   const handleToggleChore = (choreId: string) => {
     setState(prev => {
       const chore = prev.chores.find(c => c.id === choreId);
-      if (!chore) return prev;
+      if (!chore || !prev.currentUser) return prev;
 
-      const isCompleting = !chore.completed;
-      
+      // Find if current user is assigned to this chore
+      const assignment = chore.assignments.find(a => a.userId === prev.currentUser?.id);
+      if (!assignment) return prev; // User not assigned
+
+      // Check if user already completed it today
+      const alreadyCompleted = chore.completedBy.includes(prev.currentUser.id);
+
       const updatedUsers = prev.users.map(u => {
-        if (u.id === chore.assignedTo) {
+        if (u.id === prev.currentUser?.id) {
           return {
             ...u,
-            points: isCompleting ? u.points + chore.points : u.points - chore.points,
-            totalPointsEarned: isCompleting ? u.totalPointsEarned + chore.points : u.totalPointsEarned - chore.points
+            points: alreadyCompleted ? u.points - assignment.points : u.points + assignment.points,
+            totalPointsEarned: alreadyCompleted ? u.totalPointsEarned - assignment.points : u.totalPointsEarned + assignment.points
           };
         }
         return u;
       });
 
-      const updatedChores = prev.chores.map(c => 
-        c.id === choreId ? { ...c, completed: isCompleting } : c
-      );
+      const updatedChores = prev.chores.map(c => {
+        if (c.id === choreId) {
+            let newCompletedBy = [...c.completedBy];
+            if (alreadyCompleted) {
+                newCompletedBy = newCompletedBy.filter(id => id !== prev.currentUser?.id);
+            } else {
+                newCompletedBy.push(prev.currentUser?.id || '');
+            }
+            return { ...c, completedBy: newCompletedBy };
+        }
+        return c;
+      });
+
+      // Update current user state as well to reflect points immediately
+      const updatedCurrentUser = updatedUsers.find(u => u.id === prev.currentUser?.id) || prev.currentUser;
 
       return {
         ...prev,
         users: updatedUsers,
-        chores: updatedChores
+        chores: updatedChores,
+        currentUser: updatedCurrentUser
       };
     });
   };
@@ -212,7 +234,13 @@ const App: React.FC = () => {
     setState(prev => ({
       ...prev,
       users: prev.users.filter(u => u.id !== id),
-      chores: prev.chores.filter(c => c.assignedTo !== id)
+      chores: prev.chores.filter(c => 
+        // Keep chore if assigned to multiple people, just remove this user from assignments
+        c.assignments.length > 1 || c.assignments[0].userId !== id
+      ).map(c => ({
+          ...c,
+          assignments: c.assignments.filter(a => a.userId !== id)
+      }))
     }));
   };
 

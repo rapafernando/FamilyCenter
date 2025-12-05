@@ -1,8 +1,8 @@
-import { GoogleGenAI, Type } from "@google/genai";
+
+import { GoogleGenAI } from "@google/genai";
 
 // Access API key safely. 
-// We use a try-catch block to handle cases where `process` is not defined in the browser,
-// preventing a ReferenceError if the build replacement doesn't happen.
+// We use a try-catch block to handle cases where `process` is not defined in the browser.
 let apiKey = '';
 try {
   apiKey = process.env.API_KEY || '';
@@ -10,51 +10,40 @@ try {
   console.warn("process.env.API_KEY access failed, running without API key.");
 }
 
-const ai = new GoogleGenAI({ apiKey });
+// Initialize AI client only if key is present
+const ai = apiKey ? new GoogleGenAI({ apiKey }) : null;
 
-export interface AIChoreSuggestion {
-  title: string;
-  points: number;
-  description: string;
-}
+// Fallback icon if AI fails
+const DEFAULT_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>`;
 
-export const suggestChores = async (context: string): Promise<AIChoreSuggestion[]> => {
-  if (!apiKey) {
-    console.warn("Gemini API Key missing. Returning mock suggestions.");
-    return [
-      { title: "Organize Bookshelf", points: 150, description: "Sort books by size or color." },
-      { title: "Water Plants", points: 50, description: "Check soil moisture first." }
-    ];
+export const generateChoreIcon = async (choreTitle: string): Promise<string> => {
+  if (!ai) {
+    return DEFAULT_ICON;
   }
 
   try {
+    // We want the AI to return raw SVG code.
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
-      contents: `Generate a list of 3 household chores suitable for kids based on this context: "${context}". 
-      Assign realistic reward points (scale 10-500) based on difficulty.`,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.ARRAY,
-          items: {
-            type: Type.OBJECT,
-            properties: {
-              title: { type: Type.STRING },
-              points: { type: Type.INTEGER },
-              description: { type: Type.STRING }
-            },
-            required: ["title", "points", "description"]
-          }
-        }
-      }
+      contents: `Create a simple, modern, line-art SVG icon for a chore titled "${choreTitle}". 
+      Do not include \`\`\`xml or \`\`\`svg markdown tags. Return ONLY the raw <svg>...</svg> string. 
+      The viewBox should be "0 0 24 24". Use 'stroke="currentColor"' and 'fill="none"'. 
+      Make it recognizable but simple suitable for a small dashboard icon.`,
     });
 
-    if (response.text) {
-      return JSON.parse(response.text) as AIChoreSuggestion[];
+    let svg = response.text || '';
+    
+    // Clean up potential markdown formatting if the model disobeys
+    svg = svg.replace(/```xml/g, '').replace(/```svg/g, '').replace(/```/g, '').trim();
+    
+    // Basic validation
+    if (!svg.startsWith('<svg')) {
+        return DEFAULT_ICON;
     }
-    return [];
+
+    return svg;
   } catch (error) {
-    console.error("Error fetching AI suggestions:", error);
-    return [];
+    console.error("Error generating icon:", error);
+    return DEFAULT_ICON;
   }
 };

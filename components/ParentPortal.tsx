@@ -1,7 +1,8 @@
+
 import React, { useState } from 'react';
-import { User, Chore, Reward, UserRole } from '../types';
-import { Calendar as CalIcon, CheckSquare, Settings, Sparkles, Plus, Loader2, Trash2, UserPlus, Save } from 'lucide-react';
-import { suggestChores, AIChoreSuggestion } from '../services/geminiService';
+import { User, Chore, Reward, UserRole, TimeOfDay, ChoreFrequency } from '../types';
+import { Calendar as CalIcon, CheckSquare, Settings, Sparkles, Plus, Loader2, Trash2, UserPlus, Save, Clock, CalendarDays, Repeat } from 'lucide-react';
+import { generateChoreIcon } from '../services/geminiService';
 
 interface ParentPortalProps {
   familyName: string;
@@ -22,39 +23,25 @@ const ParentPortal: React.FC<ParentPortalProps> = ({
   onUpdateFamilyName, onAddUser, onDeleteUser 
 }) => {
   const [activeTab, setActiveTab] = useState<'overview' | 'chores' | 'rewards' | 'settings'>('overview');
-  const [aiPrompt, setAiPrompt] = useState('');
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [aiSuggestions, setAiSuggestions] = useState<AIChoreSuggestion[]>([]);
   
   // Settings Form State
   const [newName, setNewName] = useState('');
   const [newRole, setNewRole] = useState<UserRole>(UserRole.KID);
   const [editingFamilyName, setEditingFamilyName] = useState(familyName);
 
+  // New Chore Form State
+  const [isCreatingChore, setIsCreatingChore] = useState(false);
+  const [choreTitle, setChoreTitle] = useState('');
+  const [choreDesc, setChoreDesc] = useState('');
+  const [selectedKids, setSelectedKids] = useState<Set<string>>(new Set());
+  const [kidPoints, setKidPoints] = useState<Record<string, number>>({});
+  const [frequency, setFrequency] = useState<ChoreFrequency>('daily');
+  const [freqConfig, setFreqConfig] = useState('all'); // all, weekdays, monday, 1, etc.
+  const [timeOfDay, setTimeOfDay] = useState<TimeOfDay>('all_day');
+  const [isGeneratingIcon, setIsGeneratingIcon] = useState(false);
+
   const kids = users.filter(u => u.role === UserRole.KID);
   const wishlistItems = rewards.filter(r => r.requestedBy && !r.approved);
-
-  const handleAiSuggest = async () => {
-    if (!aiPrompt.trim()) return;
-    setIsGenerating(true);
-    const suggestions = await suggestChores(aiPrompt);
-    setAiSuggestions(suggestions);
-    setIsGenerating(false);
-  };
-
-  const addSuggestion = (s: AIChoreSuggestion, kidId: string) => {
-    onAddChore({
-      title: s.title,
-      description: s.description,
-      points: s.points,
-      assignedTo: kidId,
-      recurrence: 'once',
-      completed: false,
-      dueDate: new Date().toISOString(),
-      icon: 'star'
-    });
-    setAiSuggestions(prev => prev.filter(p => p.title !== s.title));
-  };
 
   const handleAddUserSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -62,6 +49,111 @@ const ParentPortal: React.FC<ParentPortalProps> = ({
       onAddUser(newName, newRole);
       setNewName('');
     }
+  };
+
+  const handleKidSelection = (kidId: string) => {
+    const newSelection = new Set(selectedKids);
+    if (newSelection.has(kidId)) {
+        newSelection.delete(kidId);
+        const newPoints = { ...kidPoints };
+        delete newPoints[kidId];
+        setKidPoints(newPoints);
+    } else {
+        newSelection.add(kidId);
+        setKidPoints({ ...kidPoints, [kidId]: 50 }); // Default points
+    }
+    setSelectedKids(newSelection);
+  };
+
+  const handlePointChange = (kidId: string, points: number) => {
+      setKidPoints({ ...kidPoints, [kidId]: points });
+  };
+
+  const handleSaveChore = async () => {
+      if (!choreTitle.trim() || selectedKids.size === 0) {
+          alert("Please enter a title and select at least one kid.");
+          return;
+      }
+
+      setIsGeneratingIcon(true);
+      const iconSvg = await generateChoreIcon(choreTitle);
+      setIsGeneratingIcon(false);
+
+      const assignments = Array.from(selectedKids).map(kidId => ({
+          userId: kidId,
+          points: kidPoints[kidId] || 0
+      }));
+
+      onAddChore({
+          title: choreTitle,
+          description: choreDesc,
+          assignments,
+          frequency,
+          frequencyConfig: freqConfig,
+          timeOfDay,
+          completedBy: [],
+          dueDate: new Date().toISOString(),
+          icon: iconSvg
+      });
+
+      // Reset form
+      setChoreTitle('');
+      setChoreDesc('');
+      setSelectedKids(new Set());
+      setKidPoints({});
+      setFrequency('daily');
+      setFreqConfig('all');
+      setIsCreatingChore(false);
+  };
+
+  // Helper to render frequency config inputs
+  const renderFreqConfig = () => {
+      if (frequency === 'daily') {
+          return (
+              <div className="flex gap-4 mt-2">
+                  <label className="flex items-center gap-2 cursor-pointer bg-slate-50 px-3 py-2 rounded-lg border border-slate-200">
+                      <input type="radio" name="dailyConfig" checked={freqConfig === 'all'} onChange={() => setFreqConfig('all')} />
+                      <span className="text-sm">Every Day</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer bg-slate-50 px-3 py-2 rounded-lg border border-slate-200">
+                      <input type="radio" name="dailyConfig" checked={freqConfig === 'weekdays'} onChange={() => setFreqConfig('weekdays')} />
+                      <span className="text-sm">Weekdays Only</span>
+                  </label>
+              </div>
+          );
+      }
+      if (frequency === 'weekly') {
+          const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+          return (
+              <div className="mt-2">
+                  <label className="text-xs text-slate-500 font-bold uppercase">Select Day</label>
+                  <select 
+                    value={freqConfig} 
+                    onChange={(e) => setFreqConfig(e.target.value)}
+                    className="block w-full mt-1 p-2 border border-slate-300 rounded-lg"
+                  >
+                      {days.map(d => <option key={d} value={d}>{d}</option>)}
+                  </select>
+              </div>
+          );
+      }
+      if (frequency === 'monthly') {
+          return (
+            <div className="mt-2 grid grid-cols-2 gap-4">
+                <div>
+                     <label className="text-xs text-slate-500 font-bold uppercase">Day of Month (1-31)</label>
+                     <input 
+                        type="number" 
+                        min="1" 
+                        max="31" 
+                        value={freqConfig} 
+                        onChange={(e) => setFreqConfig(e.target.value)} 
+                        className="block w-full mt-1 p-2 border border-slate-300 rounded-lg"
+                     />
+                </div>
+            </div>
+          );
+      }
   };
 
   return (
@@ -84,7 +176,7 @@ const ParentPortal: React.FC<ParentPortalProps> = ({
             onClick={() => setActiveTab('chores')}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'chores' ? 'bg-blue-600 text-white' : 'hover:bg-slate-800'}`}
           >
-            <CheckSquare size={20} /> Chores & AI
+            <CheckSquare size={20} /> Chores Management
           </button>
           <button 
             onClick={() => setActiveTab('rewards')}
@@ -147,101 +239,192 @@ const ParentPortal: React.FC<ParentPortalProps> = ({
 
         {activeTab === 'chores' && (
           <div className="space-y-8">
-             <div className="bg-gradient-to-r from-violet-600 to-indigo-600 rounded-3xl p-8 text-white shadow-xl shadow-indigo-200">
-                <div className="flex items-start gap-4 mb-6">
-                   <div className="p-3 bg-white/20 rounded-xl backdrop-blur-sm">
-                     <Sparkles size={32} />
-                   </div>
-                   <div>
-                     <h3 className="text-2xl font-bold">Magic Chore Creator</h3>
-                     <p className="text-indigo-100 max-w-xl">Use Gemini AI to break down tasks. Type something like "Clean the messy kitchen" or "Get ready for school".</p>
-                   </div>
+             {/* Header / Add Button */}
+             <div className="flex items-center justify-between">
+                <div>
+                    <h2 className="text-2xl font-bold text-slate-800">Chore Management</h2>
+                    <p className="text-slate-500">Create tasks and assign them to your kids.</p>
                 </div>
-                
-                <div className="flex gap-3 mb-6">
-                   <input 
-                      type="text" 
-                      value={aiPrompt}
-                      onChange={(e) => setAiPrompt(e.target.value)}
-                      placeholder="Describe a task..."
-                      className="flex-1 px-5 py-4 rounded-xl text-slate-900 focus:outline-none focus:ring-4 focus:ring-white/30"
-                      onKeyDown={(e) => e.key === 'Enter' && handleAiSuggest()}
-                   />
-                   <button 
-                    onClick={handleAiSuggest}
-                    disabled={isGenerating}
-                    className="px-8 py-4 bg-white text-indigo-600 font-bold rounded-xl hover:bg-indigo-50 transition-colors disabled:opacity-70 flex items-center gap-2"
-                   >
-                     {isGenerating ? <Loader2 className="animate-spin"/> : 'Generate'}
-                   </button>
-                </div>
-
-                {/* AI Suggestions Results */}
-                {aiSuggestions.length > 0 && (
-                   <div className="bg-white/10 backdrop-blur-md rounded-xl p-6 border border-white/20">
-                      <h4 className="font-bold mb-4 text-sm uppercase tracking-wide opacity-80">AI Suggestions</h4>
-                      <div className="grid gap-4">
-                        {aiSuggestions.map((suggestion, idx) => (
-                           <div key={idx} className="bg-white text-slate-800 p-4 rounded-lg flex items-center justify-between shadow-lg">
-                              <div>
-                                 <p className="font-bold text-lg">{suggestion.title}</p>
-                                 <p className="text-sm text-slate-500">{suggestion.description}</p>
-                                 <span className="inline-block mt-2 text-xs font-bold bg-indigo-100 text-indigo-700 px-2 py-1 rounded">{suggestion.points} pts</span>
-                              </div>
-                              <div className="flex gap-2">
-                                 {kids.map(kid => (
-                                   <button 
-                                      key={kid.id}
-                                      onClick={() => addSuggestion(suggestion, kid.id)}
-                                      className="w-10 h-10 rounded-full border border-slate-200 overflow-hidden hover:ring-2 ring-indigo-500 transition-all tooltip"
-                                      title={`Assign to ${kid.name}`}
-                                   >
-                                      <img src={kid.avatar} className="w-full h-full" alt={kid.name} />
-                                   </button>
-                                 ))}
-                                 {kids.length === 0 && <span className="text-xs text-red-500 flex items-center">Add kids in Settings first!</span>}
-                              </div>
-                           </div>
-                        ))}
-                      </div>
-                   </div>
-                )}
+                <button 
+                    onClick={() => setIsCreatingChore(!isCreatingChore)}
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl font-bold flex items-center gap-2 transition-colors"
+                >
+                    {isCreatingChore ? 'Cancel' : <><Plus size={20} /> Add New Chore</>}
+                </button>
              </div>
 
+             {/* Add Chore Form */}
+             {isCreatingChore && (
+                 <div className="bg-white p-8 rounded-2xl shadow-lg border border-slate-200 animate-in fade-in slide-in-from-top-4">
+                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                         {/* Left Column: Basic Info */}
+                         <div className="space-y-6">
+                             <div>
+                                 <label className="block text-sm font-bold text-slate-700 mb-2">Chore Title</label>
+                                 <input 
+                                     type="text" 
+                                     value={choreTitle}
+                                     onChange={(e) => setChoreTitle(e.target.value)}
+                                     placeholder="e.g. Make Bed, Wash Dishes"
+                                     className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                                 />
+                                 <p className="text-xs text-slate-400 mt-1 flex items-center gap-1">
+                                     <Sparkles size={12}/> AI will generate a unique icon for this task.
+                                 </p>
+                             </div>
+                             <div>
+                                 <label className="block text-sm font-bold text-slate-700 mb-2">Description (Optional)</label>
+                                 <textarea 
+                                     value={choreDesc}
+                                     onChange={(e) => setChoreDesc(e.target.value)}
+                                     placeholder="e.g. Put pillows in place and fold blanket"
+                                     className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none h-24"
+                                 />
+                             </div>
+                             
+                             {/* Time of Day */}
+                             <div>
+                                 <label className="block text-sm font-bold text-slate-700 mb-2 flex items-center gap-2">
+                                     <Clock size={16} className="text-slate-400"/> Time of Day
+                                 </label>
+                                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                     {(['morning', 'afternoon', 'evening', 'all_day'] as const).map(t => (
+                                         <button 
+                                             key={t}
+                                             onClick={() => setTimeOfDay(t)}
+                                             className={`px-2 py-2 rounded-lg text-sm font-medium border transition-colors capitalize ${timeOfDay === t ? 'bg-blue-100 border-blue-300 text-blue-700' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}
+                                         >
+                                             {t.replace('_', ' ')}
+                                         </button>
+                                     ))}
+                                 </div>
+                             </div>
+                         </div>
+
+                         {/* Right Column: Assignment & Frequency */}
+                         <div className="space-y-6">
+                             {/* Assignments */}
+                             <div className="bg-slate-50 p-5 rounded-xl border border-slate-200">
+                                 <label className="block text-sm font-bold text-slate-700 mb-3 flex items-center gap-2">
+                                     <UserPlus size={16} className="text-slate-400"/> Assign To & Set Points
+                                 </label>
+                                 <div className="space-y-3">
+                                     {kids.length === 0 && <p className="text-sm text-red-500">No kids found. Add them in settings.</p>}
+                                     {kids.map(kid => (
+                                         <div key={kid.id} className="flex items-center justify-between bg-white p-3 rounded-lg border border-slate-200">
+                                             <div className="flex items-center gap-3">
+                                                 <input 
+                                                     type="checkbox" 
+                                                     checked={selectedKids.has(kid.id)}
+                                                     onChange={() => handleKidSelection(kid.id)}
+                                                     className="w-5 h-5 rounded text-blue-600 focus:ring-blue-500 border-gray-300"
+                                                 />
+                                                 <span className="font-medium text-slate-700">{kid.name}</span>
+                                             </div>
+                                             {selectedKids.has(kid.id) && (
+                                                 <div className="flex items-center gap-2">
+                                                     <input 
+                                                         type="number" 
+                                                         value={kidPoints[kid.id]}
+                                                         onChange={(e) => handlePointChange(kid.id, parseInt(e.target.value) || 0)}
+                                                         className="w-20 px-2 py-1 border border-slate-300 rounded text-right"
+                                                     />
+                                                     <span className="text-xs text-slate-500 font-bold">PTS</span>
+                                                 </div>
+                                             )}
+                                         </div>
+                                     ))}
+                                 </div>
+                             </div>
+
+                             {/* Frequency */}
+                             <div className="bg-slate-50 p-5 rounded-xl border border-slate-200">
+                                 <label className="block text-sm font-bold text-slate-700 mb-3 flex items-center gap-2">
+                                     <Repeat size={16} className="text-slate-400"/> Frequency
+                                 </label>
+                                 <div className="flex gap-2">
+                                     {(['daily', 'weekly', 'monthly'] as const).map(f => (
+                                         <button 
+                                             key={f}
+                                             onClick={() => { setFrequency(f); setFreqConfig(f === 'weekly' ? 'Monday' : (f === 'monthly' ? '1' : 'all')); }}
+                                             className={`flex-1 py-2 rounded-lg text-sm font-medium border transition-colors capitalize ${frequency === f ? 'bg-blue-100 border-blue-300 text-blue-700' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}
+                                         >
+                                             {f}
+                                         </button>
+                                     ))}
+                                 </div>
+                                 {renderFreqConfig()}
+                             </div>
+                         </div>
+                     </div>
+                     
+                     <div className="mt-8 flex justify-end gap-4 border-t border-slate-100 pt-6">
+                         <button 
+                             onClick={() => setIsCreatingChore(false)}
+                             className="px-6 py-2.5 rounded-xl font-bold text-slate-500 hover:bg-slate-100"
+                         >
+                             Cancel
+                         </button>
+                         <button 
+                             onClick={handleSaveChore}
+                             disabled={isGeneratingIcon}
+                             className="px-8 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl flex items-center gap-2 disabled:opacity-70"
+                         >
+                             {isGeneratingIcon ? <Loader2 className="animate-spin" /> : <Save size={20} />}
+                             Save Chore
+                         </button>
+                     </div>
+                 </div>
+             )}
+
+             {/* Existing Chores List */}
              <div className="bg-white p-6 rounded-2xl border border-slate-200">
                 <h3 className="text-xl font-bold mb-6 text-slate-800">Active Chores List</h3>
                 <div className="overflow-x-auto">
                    <table className="w-full text-left">
                       <thead>
                         <tr className="border-b border-slate-100">
+                           <th className="pb-3 text-slate-400 font-medium text-sm pl-4">Icon</th>
                            <th className="pb-3 text-slate-400 font-medium text-sm">Chore</th>
+                           <th className="pb-3 text-slate-400 font-medium text-sm">Frequency</th>
                            <th className="pb-3 text-slate-400 font-medium text-sm">Assigned To</th>
-                           <th className="pb-3 text-slate-400 font-medium text-sm">Points</th>
-                           <th className="pb-3 text-slate-400 font-medium text-sm">Status</th>
-                           <th className="pb-3 text-slate-400 font-medium text-sm text-right">Action</th>
+                           <th className="pb-3 text-slate-400 font-medium text-sm text-right pr-4">Action</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-50">
                          {chores.map(chore => (
                            <tr key={chore.id} className="group hover:bg-slate-50">
-                              <td className="py-4 font-medium text-slate-700">{chore.title}</td>
+                              <td className="py-4 pl-4">
+                                  <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-lg flex items-center justify-center p-2" dangerouslySetInnerHTML={{ __html: chore.icon }} />
+                              </td>
+                              <td className="py-4 font-medium text-slate-700">
+                                  {chore.title}
+                                  <div className="text-xs text-slate-400 capitalize">{chore.timeOfDay.replace('_', ' ')}</div>
+                              </td>
+                              <td className="py-4 text-slate-600 text-sm">
+                                  <span className="capitalize font-medium">{chore.frequency}</span>
+                                  <span className="text-slate-400 block text-xs">
+                                      {chore.frequencyConfig === 'all' ? 'Every Day' : chore.frequencyConfig}
+                                  </span>
+                              </td>
                               <td className="py-4">
-                                <div className="flex items-center gap-2">
-                                   <img src={users.find(u => u.id === chore.assignedTo)?.avatar} className="w-6 h-6 rounded-full"/>
-                                   <span className="text-sm text-slate-600">{users.find(u => u.id === chore.assignedTo)?.name}</span>
+                                <div className="flex flex-col gap-1">
+                                   {chore.assignments.map(a => {
+                                       const user = users.find(u => u.id === a.userId);
+                                       if (!user) return null;
+                                       return (
+                                           <div key={a.userId} className="flex items-center gap-2 text-sm">
+                                               <img src={user.avatar} className="w-5 h-5 rounded-full" alt={user.name}/>
+                                               <span className="text-slate-600">{user.name} <span className="text-slate-400 text-xs">({a.points} pts)</span></span>
+                                           </div>
+                                       );
+                                   })}
                                 </div>
                               </td>
-                              <td className="py-4 text-slate-600">{chore.points}</td>
-                              <td className="py-4">
-                                 {chore.completed 
-                                   ? <span className="text-green-600 text-sm font-bold bg-green-100 px-2 py-1 rounded">Done</span>
-                                   : <span className="text-slate-400 text-sm">Pending</span>
-                                 }
-                              </td>
-                              <td className="py-4 text-right">
+                              <td className="py-4 text-right pr-4">
                                 <button 
                                   onClick={() => onDeleteChore(chore.id)}
-                                  className="text-slate-300 hover:text-red-500 transition-colors"
+                                  className="text-slate-300 hover:text-red-500 transition-colors p-2"
                                 >
                                   <Trash2 size={18} />
                                 </button>

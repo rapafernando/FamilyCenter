@@ -16,7 +16,7 @@ let accessToken: string | null = null;
  * This should be called when the app starts or the auth component mounts.
  */
 export const initGoogleClient = (callback: (response: any) => void) => {
-  if (window.google) {
+  if (typeof window !== 'undefined' && window.google) {
     tokenClient = window.google.accounts.oauth2.initTokenClient({
       client_id: GOOGLE_CLIENT_ID,
       scope: GOOGLE_SCOPES,

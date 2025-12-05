@@ -1,3 +1,4 @@
+
 import { User, Chore, Reward, CalendarEvent, UserRole, Meal, Photo } from './types';
 
 // Default initial state for a fresh app

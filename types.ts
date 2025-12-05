@@ -1,3 +1,4 @@
+
 export enum UserRole {
   PARENT = 'PARENT',
   KID = 'KID'
@@ -12,16 +13,25 @@ export interface User {
   totalPointsEarned: number; // Lifetime stats
 }
 
+export interface ChoreAssignment {
+  userId: string;
+  points: number;
+}
+
+export type ChoreFrequency = 'daily' | 'weekly' | 'monthly';
+export type TimeOfDay = 'morning' | 'afternoon' | 'evening' | 'all_day';
+
 export interface Chore {
   id: string;
   title: string;
   description?: string;
-  points: number;
-  assignedTo: string; // User ID
-  recurrence: 'daily' | 'weekly' | 'once';
-  completed: boolean;
-  dueDate: string; // ISO Date string
-  icon?: string;
+  assignments: ChoreAssignment[]; // Who does it and for how much
+  frequency: ChoreFrequency;
+  frequencyConfig: string; // JSON string or simple string identifying details (e.g. "weekdays", "monday", "15")
+  timeOfDay: TimeOfDay;
+  completedBy: string[]; // Array of user IDs who completed it today
+  dueDate: string; // ISO Date string for the current active instance
+  icon: string; // SVG String
 }
 
 export interface Reward {

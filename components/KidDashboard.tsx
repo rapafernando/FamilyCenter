@@ -1,6 +1,7 @@
+
 import React, { useState } from 'react';
 import { User, Chore, Reward } from '../types';
-import { CheckCircle2, Circle, Gift, Trophy, Star, Plus } from 'lucide-react';
+import { CheckCircle2, Circle, Gift, Trophy, Star, Plus, Clock } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 
 interface KidDashboardProps {
@@ -16,11 +17,12 @@ const KidDashboard: React.FC<KidDashboardProps> = ({ currentUser, chores, reward
   const [wishInput, setWishInput] = useState('');
   const [wishCost, setWishCost] = useState(100);
 
-  const myChores = chores.filter(c => c.assignedTo === currentUser.id);
+  // Filter chores where current user is in the assignments list
+  const myChores = chores.filter(c => c.assignments.some(a => a.userId === currentUser.id));
   const myRewards = rewards.filter(r => !r.requestedBy || r.requestedBy === currentUser.id);
   
-  // Simple completion stats
-  const completedCount = myChores.filter(c => c.completed).length;
+  // Calculate completion based on whether currentUser ID is in completedBy array
+  const completedCount = myChores.filter(c => c.completedBy.includes(currentUser.id)).length;
   const totalCount = myChores.length;
   const progress = totalCount === 0 ? 0 : (completedCount / totalCount) * 100;
 
@@ -87,31 +89,43 @@ const KidDashboard: React.FC<KidDashboardProps> = ({ currentUser, chores, reward
                   <p className="text-xl">All caught up! You are awesome!</p>
                 </div>
               )}
-              {myChores.map(chore => (
-                <div 
-                  key={chore.id} 
-                  onClick={() => onToggleChore(chore.id)}
-                  className={`group relative overflow-hidden p-6 rounded-2xl transition-all cursor-pointer border-2 ${chore.completed ? 'bg-green-50 border-green-200' : 'bg-white border-slate-100 hover:border-blue-300 hover:shadow-md'}`}
-                >
-                  <div className="flex items-center justify-between z-10 relative">
-                    <div className="flex items-center gap-4">
-                      {chore.completed ? 
-                        <CheckCircle2 size={32} className="text-green-500" /> : 
-                        <Circle size={32} className="text-slate-300 group-hover:text-blue-400" />
-                      }
-                      <div>
-                        <h3 className={`text-xl font-bold ${chore.completed ? 'text-green-800 line-through opacity-70' : 'text-slate-800'}`}>{chore.title}</h3>
-                        <p className={`text-sm ${chore.completed ? 'text-green-600' : 'text-slate-500'}`}>
-                          {chore.recurrence === 'daily' ? 'Due Today' : 'Weekly Goal'}
-                        </p>
+              {myChores.map(chore => {
+                const isCompleted = chore.completedBy.includes(currentUser.id);
+                const myAssignment = chore.assignments.find(a => a.userId === currentUser.id);
+                const points = myAssignment ? myAssignment.points : 0;
+
+                return (
+                  <div 
+                    key={chore.id} 
+                    onClick={() => onToggleChore(chore.id)}
+                    className={`group relative overflow-hidden p-6 rounded-2xl transition-all cursor-pointer border-2 ${isCompleted ? 'bg-green-50 border-green-200' : 'bg-white border-slate-100 hover:border-blue-300 hover:shadow-md'}`}
+                  >
+                    <div className="flex items-center justify-between z-10 relative">
+                      <div className="flex items-center gap-4">
+                        {isCompleted ? 
+                          <CheckCircle2 size={32} className="text-green-500 flex-shrink-0" /> : 
+                          <Circle size={32} className="text-slate-300 group-hover:text-blue-400 flex-shrink-0" />
+                        }
+                        
+                        {/* Icon Container */}
+                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 ${isCompleted ? 'bg-green-100 text-green-600' : 'bg-blue-50 text-blue-600'}`}>
+                           <div className="w-6 h-6" dangerouslySetInnerHTML={{ __html: chore.icon }} />
+                        </div>
+
+                        <div>
+                          <h3 className={`text-xl font-bold ${isCompleted ? 'text-green-800 line-through opacity-70' : 'text-slate-800'}`}>{chore.title}</h3>
+                          <p className={`text-sm flex items-center gap-1 ${isCompleted ? 'text-green-600' : 'text-slate-500'}`}>
+                            <Clock size={12} /> {chore.timeOfDay.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase())}
+                          </p>
+                        </div>
+                      </div>
+                      <div className={`px-4 py-1.5 rounded-full font-bold flex-shrink-0 ${isCompleted ? 'bg-green-200 text-green-800' : 'bg-blue-100 text-blue-700'}`}>
+                        +{points}
                       </div>
                     </div>
-                    <div className={`px-4 py-1.5 rounded-full font-bold ${chore.completed ? 'bg-green-200 text-green-800' : 'bg-blue-100 text-blue-700'}`}>
-                      +{chore.points}
-                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
 
             {/* Progress Card */}
