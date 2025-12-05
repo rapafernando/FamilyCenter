@@ -13,18 +13,18 @@ interface ParentPortalProps {
   onAddChore: (chore: Omit<Chore, 'id'>) => void;
   onUpdateChore: (chore: Chore) => void;
   onDeleteChore: (id: string) => void;
-  onApproveReward: (id: string) => void;
+  onApproveReward: (id: string, adjustedCost?: number) => void;
   onUpdateFamilyName: (name: string) => void;
   onAddUser: (name: string, role: UserRole) => void;
   onDeleteUser: (id: string) => void;
   onAddReward: (reward: Reward) => void;
+  onUpdateReward: (reward: Reward) => void;
   onDeleteReward: (id: string) => void;
   onRedeemSharedReward: (id: string) => void;
 }
 
-// ... (Keep existing CHORE_ICONS array) ...
 const CHORE_ICONS = [
-  { name: 'Sparkles', svg: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>' },
+  { name: 'Sparkles', svg: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L12 3Z"/></svg>' },
   { name: 'Trash', svg: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>' },
   { name: 'Bed', svg: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4v16"/><path d="M2 8h18a2 2 0 0 1 2 2v10"/><path d="M2 17h20"/><path d="M6 8v9"/></svg>' },
   { name: 'Dishes', svg: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2v0a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3"/><path d="M21 15v6"/></svg>' },
@@ -39,7 +39,7 @@ const CHORE_ICONS = [
 const ParentPortal: React.FC<ParentPortalProps> = ({ 
   familyName, users, chores, rewards, choreHistory = [],
   onAddChore, onUpdateChore, onDeleteChore, onApproveReward, 
-  onUpdateFamilyName, onAddUser, onDeleteUser, onAddReward, onDeleteReward, onRedeemSharedReward
+  onUpdateFamilyName, onAddUser, onDeleteUser, onAddReward, onUpdateReward, onDeleteReward, onRedeemSharedReward
 }) => {
   const [activeTab, setActiveTab] = useState<'overview' | 'chores' | 'rewards' | 'settings' | 'history'>('overview');
   
@@ -61,17 +61,25 @@ const ParentPortal: React.FC<ParentPortalProps> = ({
   const [selectedIcon, setSelectedIcon] = useState<string>(CHORE_ICONS[0].svg);
   const [activeMenuChoreId, setActiveMenuChoreId] = useState<string | null>(null);
 
-  // New Reward Form State
+  // Rewards State
+  const [isCreatingReward, setIsCreatingReward] = useState(false);
+  const [editingRewardId, setEditingRewardId] = useState<string | null>(null);
   const [rewardTitle, setRewardTitle] = useState('');
   const [rewardCost, setRewardCost] = useState(100);
   const [isSharedReward, setIsSharedReward] = useState(false);
-  const [isCreatingReward, setIsCreatingReward] = useState(false);
+  const [activeMenuRewardId, setActiveMenuRewardId] = useState<string | null>(null);
+  
+  // Approval State
+  const [approvalCosts, setApprovalCosts] = useState<Record<string, number>>({});
 
   const kids = users.filter(u => u.role === UserRole.KID);
-  const wishlistItems = rewards.filter(r => r.requestedBy && !r.approved);
-  const parentCreatedRewards = rewards.filter(r => !r.requestedBy);
+  
+  // New Logic: 
+  // Pending = Not Approved (regardless of who created it, though mostly kids)
+  // Active = Approved (includes parent created + approved wishlist)
+  const pendingRewards = rewards.filter(r => !r.approved);
+  const activeRewards = rewards.filter(r => r.approved);
 
-  // ... (Keep existing form handlers: handleAddUserSubmit, handleKidSelection, etc.) ...
   const handleAddUserSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if(newName.trim()) {
@@ -173,20 +181,52 @@ const ParentPortal: React.FC<ParentPortalProps> = ({
       resetForm();
   };
   
+  const handleEditReward = (reward: Reward) => {
+      setEditingRewardId(reward.id);
+      setRewardTitle(reward.title);
+      setRewardCost(reward.cost);
+      setIsSharedReward(!!reward.isShared);
+      setIsCreatingReward(true);
+      setActiveMenuRewardId(null);
+  };
+
   const handleSaveReward = () => {
       if (!rewardTitle.trim()) return;
-      onAddReward({
-          id: `r-${Date.now()}`,
+      
+      const rewardData = {
           title: rewardTitle,
           cost: rewardCost,
-          approved: true,
+          isShared: isSharedReward,
           image: `https://ui-avatars.com/api/?name=${encodeURIComponent(rewardTitle)}&background=random`,
-          isShared: isSharedReward
-      });
+          approved: true // Parent created/edited rewards are always active
+      };
+
+      if (editingRewardId) {
+          const existing = rewards.find(r => r.id === editingRewardId);
+          if (existing) {
+             onUpdateReward({ ...existing, ...rewardData });
+          }
+      } else {
+          onAddReward({
+              ...rewardData,
+              id: `r-${Date.now()}`
+          });
+      }
+
       setRewardTitle('');
       setRewardCost(100);
       setIsSharedReward(false);
       setIsCreatingReward(false);
+      setEditingRewardId(null);
+  };
+
+  const handleApproveWithCost = (id: string, originalCost: number) => {
+      const finalCost = approvalCosts[id] !== undefined ? approvalCosts[id] : originalCost;
+      onApproveReward(id, finalCost);
+      // Clean up state
+      const newCosts = {...approvalCosts};
+      delete newCosts[id];
+      setApprovalCosts(newCosts);
   };
 
   const renderFreqConfig = () => {
@@ -261,7 +301,7 @@ const ParentPortal: React.FC<ParentPortalProps> = ({
           <button onClick={() => setActiveTab('overview')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'overview' ? 'bg-blue-600 text-white' : 'hover:bg-slate-800'}`}><CalIcon size={20} /> Overview</button>
           <button onClick={() => setActiveTab('history')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'history' ? 'bg-blue-600 text-white' : 'hover:bg-slate-800'}`}><BarChart2 size={20} /> History & Analytics</button>
           <button onClick={() => setActiveTab('chores')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'chores' ? 'bg-blue-600 text-white' : 'hover:bg-slate-800'}`}><CheckSquare size={20} /> Chores Management</button>
-          <button onClick={() => setActiveTab('rewards')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'rewards' ? 'bg-blue-600 text-white' : 'hover:bg-slate-800'}`}><Gift size={20} /> Rewards {wishlistItems.length > 0 && (<span className="ml-auto bg-rose-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">{wishlistItems.length}</span>)}</button>
+          <button onClick={() => setActiveTab('rewards')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'rewards' ? 'bg-blue-600 text-white' : 'hover:bg-slate-800'}`}><Gift size={20} /> Rewards {pendingRewards.length > 0 && (<span className="ml-auto bg-rose-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">{pendingRewards.length}</span>)}</button>
           <button onClick={() => setActiveTab('settings')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'settings' ? 'bg-blue-600 text-white' : 'hover:bg-slate-800'}`}><Settings size={20} /> Settings</button>
         </nav>
         <div className="mt-auto pt-6 border-t border-slate-800"><p className="text-xs text-center opacity-40">Connected as Parent</p></div>
@@ -372,12 +412,12 @@ const ParentPortal: React.FC<ParentPortalProps> = ({
            <div className="space-y-6">
                 <div className="flex items-center justify-between">
                     <div><h2 className="text-2xl font-bold text-slate-800">Rewards Center</h2><p className="text-slate-500">Manage wishlist items and create shared goals.</p></div>
-                    <button onClick={() => setIsCreatingReward(!isCreatingReward)} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl font-bold flex items-center gap-2 transition-colors"><Plus size={20} /> Create Reward</button>
+                    <button onClick={() => { setIsCreatingReward(!isCreatingReward); setEditingRewardId(null); setRewardTitle(''); setRewardCost(100); }} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl font-bold flex items-center gap-2 transition-colors"><Plus size={20} /> Create Reward</button>
                 </div>
 
                 {isCreatingReward && (
                      <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 animate-in fade-in slide-in-from-top-4">
-                         <h3 className="text-lg font-bold mb-4">Create New Reward</h3>
+                         <h3 className="text-lg font-bold mb-4">{editingRewardId ? 'Edit Reward' : 'Create New Reward'}</h3>
                          <div className="flex gap-4 mb-4">
                              <div className="flex-1"><label className="block text-sm font-bold text-slate-700 mb-1">Title</label><input type="text" value={rewardTitle} onChange={(e) => setRewardTitle(e.target.value)} className="w-full px-4 py-2 border rounded-xl" placeholder="e.g. Pizza Night"/></div>
                              <div className="w-32"><label className="block text-sm font-bold text-slate-700 mb-1">Cost (Pts)</label><input type="number" value={rewardCost} onChange={(e) => setRewardCost(parseInt(e.target.value))} className="w-full px-4 py-2 border rounded-xl"/></div>
@@ -390,26 +430,35 @@ const ParentPortal: React.FC<ParentPortalProps> = ({
                              <p className="text-xs text-slate-400 mt-1 ml-7">If checked, the cost will be divided by the number of kids when redeemed.</p>
                          </div>
                          <div className="flex justify-end gap-2">
-                             <button onClick={() => setIsCreatingReward(false)} className="px-4 py-2 text-slate-500">Cancel</button>
-                             <button onClick={handleSaveReward} className="px-6 py-2 bg-blue-600 text-white rounded-xl font-bold">Save Reward</button>
+                             <button onClick={() => { setIsCreatingReward(false); setEditingRewardId(null); }} className="px-4 py-2 text-slate-500">Cancel</button>
+                             <button onClick={handleSaveReward} className="px-6 py-2 bg-blue-600 text-white rounded-xl font-bold">{editingRewardId ? 'Update' : 'Save Reward'}</button>
                          </div>
                      </div>
                 )}
 
                 {/* Pending Wishlist */}
-                {wishlistItems.length > 0 && (
+                {pendingRewards.length > 0 && (
                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
                         <h3 className="font-bold text-lg mb-4 text-slate-800">Wishlist Requests (Pending)</h3>
                         <div className="space-y-3">
-                            {wishlistItems.map(item => (
+                            {pendingRewards.map(item => (
                                 <div key={item.id} className="flex items-center justify-between bg-yellow-50 p-4 rounded-xl border border-yellow-100">
                                     <div className="flex items-center gap-3">
                                         <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center border border-slate-200"><img src={users.find(u => u.id === item.requestedBy)?.avatar} className="w-8 h-8 rounded-full" /></div>
-                                        <div><p className="font-bold text-slate-800">{item.title}</p><p className="text-sm text-slate-500">Cost: {item.cost} pts</p></div>
+                                        <div><p className="font-bold text-slate-800">{item.title}</p><p className="text-sm text-slate-500">Requested Cost: {item.cost} pts</p></div>
                                     </div>
-                                    <div className="flex gap-2">
+                                    <div className="flex gap-2 items-center">
+                                        <div className="flex flex-col items-end mr-2">
+                                            <span className="text-[10px] font-bold text-slate-400 uppercase">Approve Cost</span>
+                                            <input 
+                                                type="number" 
+                                                className="w-20 px-2 py-1 text-sm border border-yellow-300 rounded text-right focus:outline-none focus:border-yellow-500"
+                                                value={approvalCosts[item.id] !== undefined ? approvalCosts[item.id] : item.cost}
+                                                onChange={(e) => setApprovalCosts({...approvalCosts, [item.id]: parseInt(e.target.value)})}
+                                            />
+                                        </div>
                                         <button onClick={() => onDeleteReward(item.id)} className="px-3 py-1 text-red-500 font-bold hover:bg-red-50 rounded-lg">Deny</button>
-                                        <button onClick={() => onApproveReward(item.id)} className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg font-medium text-sm transition-colors">Approve</button>
+                                        <button onClick={() => handleApproveWithCost(item.id, item.cost)} className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg font-medium text-sm transition-colors">Approve</button>
                                     </div>
                                 </div>
                             ))}
@@ -418,9 +467,9 @@ const ParentPortal: React.FC<ParentPortalProps> = ({
                 )}
 
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-                    <h3 className="font-bold text-lg mb-4 text-slate-800">Available Rewards</h3>
+                    <h3 className="font-bold text-lg mb-4 text-slate-800">Active Rewards</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {parentCreatedRewards.map(reward => (
+                        {activeRewards.map(reward => (
                             <div key={reward.id} className="border border-slate-200 rounded-xl p-4 flex flex-col relative overflow-hidden group">
                                 {reward.isShared && <div className="absolute top-0 right-0 bg-blue-600 text-white text-xs font-bold px-2 py-1 rounded-bl-xl"><Users size={12} className="inline mr-1"/> Shared</div>}
                                 <div className="flex items-center gap-4 mb-4">
@@ -431,7 +480,15 @@ const ParentPortal: React.FC<ParentPortalProps> = ({
                                      </div>
                                 </div>
                                 <div className="mt-auto flex gap-2">
-                                    <button onClick={() => onDeleteReward(reward.id)} className="p-2 text-slate-300 hover:text-red-500"><Trash2 size={16}/></button>
+                                    <div className="relative">
+                                         <button onClick={() => setActiveMenuRewardId(activeMenuRewardId === reward.id ? null : reward.id)} className="p-2 text-slate-300 hover:text-slate-600"><MoreVertical size={16}/></button>
+                                         {activeMenuRewardId === reward.id && (
+                                            <div className="absolute bottom-full left-0 w-32 bg-white rounded-lg shadow-xl border border-slate-100 z-50 overflow-hidden mb-1">
+                                                <button onClick={() => handleEditReward(reward)} className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"><Edit size={14} className="text-blue-500"/> Edit</button>
+                                                <button onClick={() => onDeleteReward(reward.id)} className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"><Trash2 size={14}/> Delete</button>
+                                            </div>
+                                         )}
+                                    </div>
                                     {reward.isShared && (
                                         <button onClick={() => onRedeemSharedReward(reward.id)} className="flex-1 bg-blue-100 text-blue-700 hover:bg-blue-200 py-2 rounded-lg font-bold text-sm">Redeem for Group</button>
                                     )}

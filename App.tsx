@@ -118,6 +118,13 @@ const App: React.FC = () => {
      }));
   };
 
+  const handleUpdateReward = (updatedReward: Reward) => {
+      setState(prev => ({
+          ...prev,
+          rewards: prev.rewards.map(r => r.id === updatedReward.id ? updatedReward : r)
+      }));
+  };
+
   const handleDeleteReward = (id: string) => {
     setState(prev => ({
       ...prev,
@@ -260,10 +267,14 @@ const App: React.FC = () => {
      setState(prev => ({ ...prev, rewards: [...prev.rewards, newReward] }));
   };
 
-  const handleApproveReward = (id: string) => {
+  const handleApproveReward = (id: string, adjustedCost?: number) => {
     setState(prev => ({
       ...prev,
-      rewards: prev.rewards.map(r => r.id === id ? { ...r, approved: true } : r)
+      rewards: prev.rewards.map(r => 
+          r.id === id 
+            ? { ...r, approved: true, cost: adjustedCost !== undefined ? adjustedCost : r.cost } 
+            : r
+      )
     }));
   };
 
@@ -369,6 +380,7 @@ const App: React.FC = () => {
               onAddUser={handleAddUser}
               onDeleteUser={handleDeleteUser}
               onAddReward={handleAddReward}
+              onUpdateReward={handleUpdateReward}
               onDeleteReward={handleDeleteReward}
               onRedeemSharedReward={handleRedeemSharedReward}
            />
