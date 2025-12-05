@@ -789,9 +789,11 @@ const ParentPortal: React.FC<ParentPortalProps> = ({
                                      <div>
                                         <p className="font-bold">Error loading albums</p>
                                         <p className="text-xs opacity-80">{photoError}</p>
-                                        <p className="text-[10px] text-slate-500 mt-1">
-                                            If this says "insufficient scopes", click <strong>Reset Permissions</strong> and ensure you check the "Google Photos" box in the popup.
-                                        </p>
+                                        {photoError.includes('insufficient') && (
+                                            <p className="text-[10px] text-slate-500 mt-2 bg-white/50 p-2 rounded">
+                                                <strong>Tip:</strong> If you checked the box but still see this, ensure your email is added to <strong>"Test Users"</strong> in Google Cloud Console or that the <strong>"Photos Library API"</strong> is enabled.
+                                            </p>
+                                        )}
                                      </div>
                                  </div>
                              )}

@@ -35,12 +35,13 @@ export const initGoogleClient = (callback: (response: any) => void) => {
  */
 export const signInWithGoogle = (options?: { prompt?: string }) => {
   if (tokenClient) {
-    // If prompt is provided, merge it into the request
-    if (options) {
-        tokenClient.requestAccessToken(options);
-    } else {
-        tokenClient.requestAccessToken();
-    }
+    // We explicitly pass the scope here again to override any defaults and ensure 
+    // the prompt includes exactly what we need.
+    const requestConfig = {
+        ...options,
+        scope: GOOGLE_SCOPES
+    };
+    tokenClient.requestAccessToken(requestConfig);
   } else {
     console.error("Google Token Client not initialized");
     alert("Google Client not ready. Please check your internet connection or Client ID.");
