@@ -5,8 +5,8 @@ import { cn } from '@/lib/cn';
 import { markerAttrs, type MarkerValue } from '@/lib/marker';
 
 /* ---------- Task row: big check, emoji name for pre-readers, marker strike when done ---------- */
-export function TaskRow({ title, emoji, color, done, stars, onToggle, locked }:
-  { title: string; emoji?: string; color: MarkerValue | null; done: boolean; stars?: number; onToggle: (v: boolean) => void; locked?: boolean }) {
+export function TaskRow({ title, emoji, color, done, stars, onToggle, locked, trailing, meta }:
+  { title: string; emoji?: string; color: MarkerValue | null; done: boolean; stars?: number; onToggle: (v: boolean) => void; locked?: boolean; trailing?: React.ReactNode; meta?: string }) {
   const id = useId();
   return (
     <div {...markerAttrs(color)} className="flex min-h-primary items-center gap-3 rounded-md bg-surface px-3 shadow-lift">
@@ -18,12 +18,14 @@ export function TaskRow({ title, emoji, color, done, stars, onToggle, locked }:
         </span>
         {emoji && <span aria-hidden className="text-xl">{emoji}</span>}
         <span className={cn('strike text-base font-bold', done && 'text-muted')} data-done={done}>{title}</span>
+        {meta && <span className="text-sm text-muted">{meta}</span>}
       </label>
       {!!stars && (
         <span className="flex items-center gap-1 text-sm font-bold text-ink">
           <Star aria-hidden className="h-4 w-4 fill-current" />{stars}<span className="sr-only"> stars</span>
         </span>
       )}
+      {trailing}
     </div>
   );
 }
@@ -51,17 +53,18 @@ export function StarCounter({ name, color, balance }: { name: string; color: Mar
 }
 
 /* ---------- Reward card ---------- */
-export function RewardCard({ title, cost, balance, color, onRedeem }:
-  { title: string; cost: number; balance: number; color: MarkerValue | null; onRedeem: () => void }) {
+export function RewardCard({ title, emoji, cost, balance, color, onRedeem, footer }:
+  { title: string; emoji?: string; cost: number; balance: number; color: MarkerValue | null; onRedeem: () => void; footer?: React.ReactNode }) {
   const enough = balance >= cost;
   return (
     <div {...markerAttrs(color)} className="flex flex-col gap-3 rounded-lg border-2 border-line bg-surface p-4">
-      <h3 className="text-lg text-ink">{title}</h3>
+      <h3 className="text-lg text-ink">{emoji && <span aria-hidden className="mr-2">{emoji}</span>}{title}</h3>
       <p className="flex items-center gap-1 text-sm text-muted"><Star aria-hidden className="h-4 w-4 fill-current text-ink" />{cost} stars</p>
       <button type="button" onClick={onRedeem} disabled={!enough}
         className="min-h-target rounded-md bg-m-solid px-4 font-bold text-m-on disabled:bg-surface disabled:text-muted disabled:outline disabled:outline-2 disabled:outline-line-input">
         {enough ? 'Redeem' : `${cost - balance} more to go`}
       </button>
+      {footer}
     </div>
   );
 }

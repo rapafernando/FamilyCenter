@@ -32,7 +32,7 @@ export function Button({ variant = 'primary', size = 'md', loading, disabled, cl
         'disabled:opacity-50 disabled:cursor-not-allowed', variants[variant], sizes[size], className)}
     >
       {loading && <Loader2 aria-hidden className="h-[1.1em] w-[1.1em] animate-spin motion-reduce:animate-none" />}
-      <span>{children}</span>
+      {children}
     </button>
   );
 }
