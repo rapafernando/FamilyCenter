@@ -30,3 +30,5 @@
 
 dialog::backdrop { background: var(--color-scrim); opacity: 0.6; }
 dialog:not([open]) { display: none; }
+
+@keyframes fadein { from { opacity: 0; } to { opacity: 1; } }

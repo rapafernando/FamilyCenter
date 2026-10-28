@@ -6,6 +6,7 @@ import { useApp } from '@/lib/ctx';
 import { data } from '@/lib/data/fake';
 import { PageHeader } from '@/components/shell/AppShell';
 import { AdultGate } from '@/components/shell/AdultGate';
+import { useQuery } from '@/lib/data/hooks';
 import { Button, Segmented } from '@/components/ui/controls';
 
 const ITEMS = [
@@ -22,11 +23,12 @@ const ITEMS = [
 export default function Settings() {
   const { surface, setSurface, session } = useApp();
   const router = useRouter();
+  const ai = useQuery(() => data.aiStatus(), []);
   return (
     <AdultGate>
       <PageHeader title="More" />
       <ul className="mb-6 flex max-w-[44rem] list-none flex-col gap-2 p-0">
-        {ITEMS.map(({ href, label, hint, Icon }) => (
+        {[...(ai.data?.available ? [{ href: '/assistant', label: 'Assistant', hint: 'Plan meals, read a note, save a recipe', Icon: Sparkles }] : []), ...ITEMS].map(({ href, label, hint, Icon }) => (
           <li key={href}><Link href={href} className="flex min-h-primary items-center gap-4 rounded-lg border-2 border-line bg-surface p-3 hover:border-accent">
             <Icon aria-hidden className="h-7 w-7 shrink-0 text-accent" /><span className="flex-1"><span className="block text-lg font-bold text-ink">{label}</span><span className="text-base text-muted">{hint}</span></span><ChevronRight aria-hidden className="h-5 w-5 text-muted" />
           </Link></li>

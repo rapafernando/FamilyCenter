@@ -47,7 +47,7 @@ export function RecipeView({ recipeId }: { recipeId?: string }) {
       <div className="flex flex-col gap-1"><label htmlFor="ing" className="text-sm font-bold">Ingredients</label><textarea id="ing" rows={6} aria-describedby="ing-hint" value={f.ingredients} onChange={(e) => set('ingredients', e.target.value)} className={box} />
         <p id="ing-hint" className="text-sm text-muted">One per line. {lines} {lines === 1 ? 'ingredient' : 'ingredients'}.</p></div>
       <div className="flex flex-col gap-1"><label htmlFor="steps" className="text-sm font-bold">Steps</label><textarea id="steps" rows={6} value={f.instructions} onChange={(e) => set('instructions', e.target.value)} className={box} /></div>
-      <label className="flex min-h-target items-center gap-3 font-bold text-ink"><input type="checkbox" checked={f.favorite} onChange={(e) => set('favorite', e.target.checked)} className="h-6 w-6" /><Heart aria-hidden className="h-5 w-5" />Favorite</label>
+      <label className="flex min-h-target items-center gap-3 font-bold text-ink"><input type="checkbox" checked={f.favorite} onChange={(e) => set('favorite', e.target.checked)} className="h-6 w-6 accent-accent" /><Heart aria-hidden className="h-5 w-5" />Favorite</label>
       <div className="flex flex-wrap items-center gap-3">
         <Button type="submit" size="lg" loading={busy}>Save recipe</Button>
         <Button type="button" variant="secondary" size="lg" onClick={() => router.back()}>Cancel</Button>
