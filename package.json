@@ -7,7 +7,13 @@
     "dev": "npm run tokens && next dev -p 3000",
     "build": "npm run tokens && next build",
     "start": "next start -p 3000",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "migrate": "node scripts/migrate.mjs",
+    "seed": "tsx scripts/seed.mts",
+    "worker": "tsx src/server/worker.ts",
+    "reset-password": "tsx scripts/reset-password.mts",
+    "backup": "tsx scripts/backup.mts",
+    "test:isolation": "tsx tests/isolation.test.mts"
   },
   "dependencies": {
     "@fontsource-variable/atkinson-hyperlegible-next": "^5.3.0",
@@ -15,21 +21,29 @@
     "lucide-react": "^1.63.0",
     "luxon": "^3.7.2",
     "next": "^15.5.28",
+    "nodemailer": "^10.2.1",
+    "pg": "^8.23.1",
     "qrcode": "^1.5.4",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
-    "rrule": "^2.8.1"
+    "rrule": "^2.8.1",
+    "zod": "^4.6.7",
+    "tsx": "^4.23.15"
   },
   "devDependencies": {
     "@types/luxon": "^3.7.6",
     "@types/node": "^26.6.5",
+    "@types/nodemailer": "^8.0.2",
+    "@types/pg": "^8.23.1",
     "@types/qrcode": "^1.5.6",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "autoprefixer": "^10.6.2",
     "postcss": "^8.5.32",
     "tailwindcss": "3.4",
-    "tsx": "^4.23.15",
     "typescript": "^5.9.3"
+  },
+  "overrides": {
+    "postcss": "$postcss"
   }
 }

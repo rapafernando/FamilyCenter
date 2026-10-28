@@ -1,0 +1,7 @@
+# Automatic https for the address in DOMAIN. flush_interval -1 lets the live-update stream through at once.
+{$DOMAIN} {
+	encode zstd gzip
+	reverse_proxy web:3000 {
+		flush_interval -1
+	}
+}

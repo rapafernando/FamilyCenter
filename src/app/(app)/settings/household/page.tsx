@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { DateTime } from 'luxon';
 import { errMsg, useApp, useNotice } from '@/lib/ctx';
-import { data } from '@/lib/data/fake';
+import { data } from '@/lib/data';
 import { useQuery } from '@/lib/data/hooks';
 import type { Role } from '@/lib/types';
 import { PageHeader } from '@/components/shell/AppShell';
@@ -17,6 +17,8 @@ const ROLE: Record<Role, string> = { owner: 'Owner', adult: 'Adult', viewer: 'Ca
 export default function HouseholdSettings() {
   const { household } = useApp(); const notify = useNotice();
   const mem = useQuery(() => data.listMembers(), []);
+  const feat = useQuery(() => data.features(), []);
+  const [link, setLink] = useState<{ email: string; url: string } | null>(null);
   const [h, setH] = useState({ name: household.name, timezone: household.timezone, weekStartsOn: household.weekStartsOn, defaultView: household.defaultView, location: household.location });
   const [inv, setInv] = useState({ email: '', role: 'adult' as 'adult' | 'viewer' }); const [err, setErr] = useState(''); const [gone, setGone] = useState<{ id: string; name: string } | null>(null);
   const zones = ZONES.includes(h.timezone) ? ZONES : [h.timezone, ...ZONES];
@@ -51,12 +53,22 @@ export default function HouseholdSettings() {
           {!!mem.data?.invitations.length && <><h3 className="text-base font-bold text-ink">Waiting to join</h3>
             <ul className="m-0 flex list-none flex-col gap-2 p-0">{mem.data.invitations.map((i) => (
               <li key={i.id} className="flex flex-wrap items-center justify-between gap-2"><span className="text-base text-ink">{i.email} <span className="text-sm text-muted">· {ROLE[i.role]}</span></span><Button size="sm" variant="ghost" onClick={() => guard(() => data.revokeInvitation(i.id), 'Invitation cancelled')}>Cancel invitation</Button></li>))}</ul></>}
-          <form className="flex flex-wrap items-end gap-2" onSubmit={(e) => { e.preventDefault(); guard(async () => { await data.invite(inv.email, inv.role); setInv({ email: '', role: 'adult' }); }, 'Invitation made'); }}>
+          <form className="flex flex-wrap items-end gap-2" onSubmit={(e) => { e.preventDefault(); guard(async () => { const r = await data.invite(inv.email, inv.role); setLink({ email: r.email, url: `${window.location.origin}/join/${r.token}` }); setInv({ email: '', role: 'adult' }); }, 'Invitation made'); }}>
             <div className="min-w-[12rem] flex-1"><Field label="Invite by email" type="email" value={inv.email} onChange={(e) => setInv({ ...inv, email: e.target.value })} placeholder="partner@example.com" /></div>
             <Select label="As" value={inv.role} onChange={(e) => setInv({ ...inv, role: e.target.value as 'adult' | 'viewer' })}><option value="adult">Adult</option><option value="viewer">Can only look</option></Select>
             <Button type="submit">Invite</Button>
           </form>
-          <p className="text-sm text-muted">Email sending comes with the server. For now the invitation is listed, and the link is shared by hand.</p>
+          {link && (
+            <div className="flex flex-col gap-2 rounded-md border-2 border-line bg-accent-tint p-3" role="status">
+              <p className="text-base font-bold text-ink">Link for {link.email}</p>
+              <input readOnly aria-label={`Invitation link for ${link.email}`} value={link.url} onFocus={(e) => e.currentTarget.select()} className="min-h-target w-full rounded-md border-2 border-line-input bg-surface px-3 text-sm text-ink" />
+              <div className="flex flex-wrap items-center gap-2">
+                <Button size="sm" variant="secondary" onClick={() => { navigator.clipboard?.writeText(link.url).then(() => notify({ tone: 'success', title: 'Link copied' }), () => notify({ tone: 'warning', title: 'Could not copy', body: 'Select the link and copy it by hand.' })); }}>Copy link</Button>
+                <span className="text-sm text-muted">Works once, for 7 days. {feat.data?.smtp ? 'It was also emailed.' : 'Email is not set up on this server, so send the link yourself.'}</span>
+              </div>
+            </div>
+          )}
+          {!link && <p className="text-sm text-muted">The invitation link is shown once, right after you invite someone. It works for 7 days.</p>}
         </section>
       </div>
       <ChoiceDialog open={!!gone} danger title={`Remove ${gone?.name}?`} detail="They can no longer sign in to this household." choices={[{ value: 'go', label: 'Remove person' }]} onChoose={() => { const g = gone!; setGone(null); guard(() => data.removeMember(g.id), 'Removed'); }} onCancel={() => setGone(null)} />

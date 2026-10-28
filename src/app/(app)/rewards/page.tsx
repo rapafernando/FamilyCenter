@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import { errMsg, useApp, useNotice } from '@/lib/ctx';
-import { data } from '@/lib/data/fake';
+import { data } from '@/lib/data';
 import { useQuery } from '@/lib/data/hooks';
 import { fmtDate } from '@/lib/time';
 import { markerAttrs } from '@/lib/marker';

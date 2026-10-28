@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { ChevronLeft, ChevronRight, Pencil } from 'lucide-react';
 import { errMsg, useApp, useNotice } from '@/lib/ctx';
-import { data } from '@/lib/data/fake';
+import { data } from '@/lib/data';
 import { useQuery } from '@/lib/data/hooks';
 import { addDays, fmtDate } from '@/lib/time';
 import type { TaskForDay } from '@/lib/types';

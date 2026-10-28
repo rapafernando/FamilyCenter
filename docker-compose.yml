@@ -1,0 +1,80 @@
+# Run everything on one computer:   docker compose up -d --build
+# First: copy .env.example to .env and fill it in (see replica/backend.md, "Run it with Docker").
+# For a public address with automatic https:   docker compose --profile https up -d --build   (set DOMAIN in .env)
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  migrate:
+    build: .
+    command: ["npm", "run", "migrate"]
+    restart: "no"
+    depends_on:
+      db: { condition: service_healthy }
+    environment:
+      DATABASE_ADMIN_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      APP_USER_PASSWORD: ${APP_USER_PASSWORD}
+      APP_WORKER_PASSWORD: ${APP_WORKER_PASSWORD}
+
+  web:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://app_user:${APP_USER_PASSWORD}@db:5432/${POSTGRES_DB}
+      WORKER_DATABASE_URL: postgres://app_worker:${APP_WORKER_PASSWORD}@db:5432/${POSTGRES_DB}
+      PHOTO_DIR: /data/photos
+    volumes:
+      - photos:/data/photos
+    ports:
+      - "3000:3000"
+
+  worker:
+    build: .
+    restart: unless-stopped
+    command: ["npm", "run", "worker"]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://app_user:${APP_USER_PASSWORD}@db:5432/${POSTGRES_DB}
+      WORKER_DATABASE_URL: postgres://app_worker:${APP_WORKER_PASSWORD}@db:5432/${POSTGRES_DB}
+      DATABASE_ADMIN_URL: postgres://app_worker:${APP_WORKER_PASSWORD}@db:5432/${POSTGRES_DB}
+      PHOTO_DIR: /data/photos
+      BACKUP_DIR: /backups
+    volumes:
+      - photos:/data/photos
+      - ./backups:/backups
+
+  caddy:
+    image: caddy:2
+    profiles: ["https"]
+    restart: unless-stopped
+    depends_on: [web]
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+
+volumes:
+  pgdata:
+  photos:
+  caddy_data:

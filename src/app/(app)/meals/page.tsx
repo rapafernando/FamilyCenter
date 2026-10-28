@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { errMsg, useApp } from '@/lib/ctx';
-import { data } from '@/lib/data/fake';
+import { data } from '@/lib/data';
 import { useQuery } from '@/lib/data/hooks';
 import { addDays, fmtDate, startOfWeek } from '@/lib/time';
 import type { MealSlot } from '@/lib/types';

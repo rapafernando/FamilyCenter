@@ -2,7 +2,7 @@
 import { useRef, useState } from 'react';
 import { ImagePlus, Trash2 } from 'lucide-react';
 import { errMsg, useNotice } from '@/lib/ctx';
-import { data } from '@/lib/data/fake';
+import { data } from '@/lib/data';
 import { useQuery } from '@/lib/data/hooks';
 import { PageHeader } from '@/components/shell/AppShell';
 import { AdultGate } from '@/components/shell/AdultGate';
@@ -11,15 +11,15 @@ import { Banner } from '@/components/ui/misc';
 import { ChoiceDialog } from '@/components/ui/dialogs';
 import { SkeletonList } from '@/components/ui/skeleton';
 
-const MAX_SIDE = 1280;
-/** Shrinks a picture in the browser so it fits in demo storage. The real server keeps the original. */
+const MAX_SIDE = 1920;
+/** Shrinks a picture in the browser before it is sent, so uploads stay quick on a home connection. */
 async function shrink(file: File): Promise<{ dataUrl: string; caption: string; width: number; height: number }> {
   const bmp = await createImageBitmap(file);
   const k = Math.min(1, MAX_SIDE / Math.max(bmp.width, bmp.height));
   const w = Math.round(bmp.width * k), h = Math.round(bmp.height * k);
   const c = document.createElement('canvas'); c.width = w; c.height = h;
   c.getContext('2d')!.drawImage(bmp, 0, 0, w, h); bmp.close?.();
-  return { dataUrl: c.toDataURL('image/jpeg', 0.78), caption: file.name.replace(/\.[^.]+$/, '').slice(0, 60), width: w, height: h };
+  return { dataUrl: c.toDataURL('image/jpeg', 0.82), caption: file.name.replace(/\.[^.]+$/, '').slice(0, 60), width: w, height: h };
 }
 
 export default function Photos() {
@@ -32,15 +32,20 @@ export default function Photos() {
 
   async function upload(list: FileList | null) {
     if (!list?.length) return;
-    const ok = Array.from(list).filter((f) => f.type.startsWith('image/')).slice(0, 12);
+    const ok = Array.from(list).filter((f) => f.type.startsWith('image/')).slice(0, 40);
     const skipped = list.length - ok.length;
     setBusy(target.current); setErr('');
     try {
-      const out = []; for (const f of ok) out.push(await shrink(f));
-      await data.addPhotos(target.current, out);
-      notify({ tone: skipped ? 'warning' : 'success', title: `Added ${out.length} ${out.length === 1 ? 'photo' : 'photos'}`, body: skipped ? `${skipped} files were skipped. Only pictures, up to 12 at a time.` : undefined });
+      let added = 0, dupes = 0;
+      for (let i = 0; i < ok.length; i += 4) { // a few at a time keeps each upload small
+        const batch = []; for (const f of ok.slice(i, i + 4)) batch.push(await shrink(f));
+        const r = (await data.addPhotos(target.current, batch)) as { added: number; skipped: number } | undefined;
+        added += r?.added ?? batch.length; dupes += r?.skipped ?? 0;
+      }
+      const notes = [skipped ? `${skipped} files were skipped. Only pictures, up to 40 at a time.` : '', dupes ? `${dupes} were already in the album.` : ''].filter(Boolean).join(' ');
+      notify({ tone: skipped ? 'warning' : 'success', title: `Added ${added} ${added === 1 ? 'photo' : 'photos'}`, body: notes || undefined });
       q.reload();
-    } catch (e) { setErr(e instanceof DOMException && e.name === 'QuotaExceededError' ? 'This demo has run out of room for photos. Remove some, or wait for the server version.' : errMsg(e)); }
+    } catch (e) { setErr(errMsg(e)); }
     finally { setBusy(null); if (files.current) files.current.value = ''; }
   }
   return (

@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import QRCode from 'qrcode';
 import { useApp } from '@/lib/ctx';
-import { data } from '@/lib/data/fake';
+import { data } from '@/lib/data';
 import type { Slide } from '@/lib/types';
 import { SponsorSlide } from '@/components/ui/misc';
 import { useClock } from '@/components/shell/AppShell';

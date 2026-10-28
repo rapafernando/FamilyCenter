@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { CalendarSync, Users, MonitorSmartphone, SunMoon, Images, Sparkles, Home, UserCog, ChevronRight, LogOut } from 'lucide-react';
 import { useApp } from '@/lib/ctx';
-import { data } from '@/lib/data/fake';
+import { data } from '@/lib/data';
 import { PageHeader } from '@/components/shell/AppShell';
 import { AdultGate } from '@/components/shell/AdultGate';
 import { useQuery } from '@/lib/data/hooks';

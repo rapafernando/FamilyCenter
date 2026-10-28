@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { data } from '@/lib/data/fake';
+import { data } from '@/lib/data';
 import { errMsg } from '@/lib/ctx';
 import { Banner } from '@/components/ui/misc';
 import { Button, Field } from '@/components/ui/controls';
@@ -19,6 +19,7 @@ export default function SignIn() {
       <Field label="Email" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
       <Field label="Password" type="password" autoComplete="current-password" required value={pw} onChange={(e) => setPw(e.target.value)} />
       <Button type="submit" size="lg" loading={busy}>Sign in</Button>
+      <p className="text-base text-muted"><Link href="/forgot" className="font-bold text-accent underline">Forgot your password?</Link></p>
       <p className="text-base text-muted">New here? <Link href="/signup" className="font-bold text-accent underline">Create a household</Link></p>
     </form>
   );

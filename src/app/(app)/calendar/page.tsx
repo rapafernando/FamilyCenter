@@ -6,7 +6,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { DateTime } from 'luxon';
 import { cn } from '@/lib/cn';
 import { useApp } from '@/lib/ctx';
-import { data } from '@/lib/data/fake';
+import { data } from '@/lib/data';
 import { useQuery } from '@/lib/data/hooks';
 import { addDays, dayRangeUTC, describeTimes, daysUntil, fmtTime } from '@/lib/time';
 import { groupByDay, step, windowFor, type View } from '@/lib/calendar';

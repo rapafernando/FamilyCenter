@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { errMsg, useNotice } from '@/lib/ctx';
-import { data } from '@/lib/data/fake';
+import { data } from '@/lib/data';
 import { PageHeader } from '@/components/shell/AppShell';
 import { AdultGate } from '@/components/shell/AdultGate';
 import { Banner } from '@/components/ui/misc';

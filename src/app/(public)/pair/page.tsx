@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { data } from '@/lib/data/fake';
+import { data } from '@/lib/data';
 import { errMsg } from '@/lib/ctx';
 import { Banner, PairingCode } from '@/components/ui/misc';
 import { Button } from '@/components/ui/controls';

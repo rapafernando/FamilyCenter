@@ -2,3 +2,9 @@ node_modules
 .next
 next-env.d.ts
 tsconfig.tsbuildinfo
+# secrets and local data never go in git
+.env
+.env.*
+!.env.example
+/data
+/backups

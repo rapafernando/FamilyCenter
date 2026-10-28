@@ -32,6 +32,8 @@ export function commit<T>(fn: (s: State) => T): T {
 export function replaceState(s: State) { state = s; commit(() => 0); }
 export const resetDemo = () => replaceState(seed());
 export const resetEmpty = (o: Parameters<typeof emptyState>[0]) => replaceState(emptyState(o));
+/** Tell every screen that is showing data to read it again. */
+export function bump() { version++; subs.forEach((f) => f()); }
 export const subscribe = (f: () => void) => { subs.add(f); return () => { subs.delete(f); }; };
 export const getVersion = () => version;
 

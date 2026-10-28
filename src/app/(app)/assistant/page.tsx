@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { errMsg, useNotice } from '@/lib/ctx';
-import { data } from '@/lib/data/fake';
+import { data } from '@/lib/data';
 import { useQuery } from '@/lib/data/hooks';
 import type { AiJob, AiKind } from '@/lib/types';
 import { PageHeader } from '@/components/shell/AppShell';

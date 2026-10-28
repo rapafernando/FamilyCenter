@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { DateTime } from 'luxon';
 import { MonitorSmartphone } from 'lucide-react';
 import { errMsg, useNotice } from '@/lib/ctx';
-import { data } from '@/lib/data/fake';
+import { data } from '@/lib/data';
 import { useQuery } from '@/lib/data/hooks';
 import type { Device } from '@/lib/types';
 import { PageHeader } from '@/components/shell/AppShell';

@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { data } from '@/lib/data/fake';
+import { data } from '@/lib/data';
 import { errMsg } from '@/lib/ctx';
 import { Banner } from '@/components/ui/misc';
 import { Button, Field } from '@/components/ui/controls';
@@ -31,6 +31,7 @@ export default function SignUp() {
         </select>
         <p className="text-sm text-muted">Chores and “today” follow this, not the clock on each screen.</p>
       </div>
+      <p className="text-sm text-muted">Creating a household means you agree to how your information is used. <Link href="/privacy" className="font-bold text-accent underline">Read the privacy page</Link>.</p>
       <Button type="submit" size="lg" loading={busy}>Create household</Button>
     </form>
   );

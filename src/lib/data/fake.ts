@@ -23,6 +23,19 @@ const clean = (s: string) => s.trim();
 const HEX = /^#[0-9a-fA-F]{6}$/;
 
 export const data = {
+  /* ------------------------------------------------------------ what this server can do (the real server reports it; practice mode is all pretend) */
+  async features() { await wait(); return { demo: true, googleConfigured: false, googleOauthStatus: 'testing' as 'testing' | 'production', smtp: false, adsDefaultOn: false }; },
+  async previewInvitation(token: string): Promise<{ householdName: string; email: string; role: 'adult' | 'viewer' }> { await wait(); const i = need(getState().invitations.find((x) => x.token === token), 'That invitation'); return { householdName: getState().household.name, email: i.email, role: i.role }; },
+  async acceptInvitation(token: string) { await wait(); void token; throw new ApiError('unavailable', 'Invitations need the real server.'); },
+  async adImpression(campaignId: string) { void campaignId; },
+  async getAccount() { await wait(); const u = getState().user; return { email: u?.email ?? '', verified: true, canEmail: false }; },
+  async changePassword(current: string, next: string) { await wait(); const u = need(getState().user, 'Your account'); if (u.password !== current) throw new ApiError('invalid_credentials', 'The current password is not right.'); if (next.length < 8) throw new ApiError('weak_password', 'Use at least 8 characters for the password.'); commit((s) => { s.user!.password = next; }); },
+  async signOutEverywhere() { await wait(); },
+  async requestPasswordReset(email: string) { await wait(); void email; throw new ApiError('no_email', 'Practice mode cannot send email.'); },
+  async resetPassword(token: string, next: string) { await wait(); void token; void next; throw new ApiError('expired', 'Practice mode has no reset links.'); },
+  async sendEmailVerification() { await wait(); throw new ApiError('no_email', 'Practice mode cannot send email.'); },
+  async verifyEmail(token: string) { await wait(); void token; throw new ApiError('expired', 'Practice mode has no confirmation links.'); },
+
   /* ------------------------------------------------------------ session */
   async getSession(): Promise<Session> {
     await wait(); const s = getState();
@@ -33,12 +46,12 @@ export const data = {
     return { user: null, deviceId: null, role: null };
   },
   async startDemo() { await wait(); resetDemo(); const s = getState(); const owner = s.members.find((m) => m.isYou)!; s.user = { id: owner.id, name: owner.name, email: owner.email, password: 'demo' }; commit(() => 0); setSessionUserId(owner.id); },
-  async signUp(i: { name: string; email: string; password: string; householdName: string; timezone: string }) {
+  async signUp(i: { name: string; email: string; password: string; householdName?: string; timezone: string; inviteToken?: string }) {
     await wait();
     if (!/^\S+@\S+\.\S+$/.test(i.email)) throw new ApiError('invalid_email', 'Enter an email address like name@example.com.');
     if (i.password.length < 8) throw new ApiError('weak_password', 'Use at least 8 characters for the password.');
-    if (!clean(i.name) || !clean(i.householdName)) throw new ApiError('missing', 'Fill in your name and a name for the household.');
-    resetEmpty({ ...i, name: clean(i.name), householdName: clean(i.householdName) });
+    if (!clean(i.name) || !clean(i.householdName ?? '')) throw new ApiError('missing', 'Fill in your name and a name for the household.');
+    resetEmpty({ ...i, name: clean(i.name), householdName: clean(i.householdName ?? 'My household') });
     setSessionUserId(getState().user!.id);
   },
   async signIn(email: string, password: string) {

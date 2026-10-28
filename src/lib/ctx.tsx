@@ -1,7 +1,7 @@
 'use client';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { data } from './data/fake';
+import { data, startLive } from './data';
 import { useQuery } from './data/hooks';
 import { setSurfacePref, sessionDeviceId, surfacePref } from './data/store';
 import { todayIn } from './time';
@@ -50,6 +50,8 @@ export function Gate({ children }: { children: React.ReactNode }) {
   const [unlockedUntil, setUnlockedUntil] = useState(0);
   const [, force] = useState(0);
   const s = sess.data;
+  const signedIn = !!(s && (s.user || s.deviceId));
+  useEffect(() => (signedIn ? startLive() : undefined), [signedIn]);
   useEffect(() => { if (s && !s.user && !s.deviceId) router.replace('/welcome'); }, [s, router]);
   const surfaceChoice = typeof window === 'undefined' ? null : surfacePref();
   const surface: Surface = s?.deviceId || surfaceChoice === 'wall' ? 'wall' : 'handheld';
@@ -61,7 +63,7 @@ export function Gate({ children }: { children: React.ReactNode }) {
     return { session: s, household: hh.data, profiles: pr.data, today: todayIn(hh.data.timezone), surface, isAdult, unlocked,
       setSurface: (v) => { setSurfacePref(v); force((n) => n + 1); }, unlock: () => setUnlockedUntil(Date.now() + 5 * 60000) };
   }, [s, hh.data, pr.data, surface, unlockedUntil]);
-  if (sess.error || hh.error) return <div className="p-6"><Banner tone="danger" title="This screen could not load">Reload the page. If it keeps happening, check that the app is running.</Banner></div>;
+  if (sess.error || (signedIn && (hh.error || pr.error))) return <div className="p-6"><Banner tone="danger" title="This screen could not load">Reload the page. If it keeps happening, check that the app is running.</Banner></div>;
   if (!value) return <div className="p-6 text-muted" role="status">Loading…</div>;
   void path; void sessionDeviceId;
   return <AppCtx.Provider value={value}>{children}</AppCtx.Provider>;

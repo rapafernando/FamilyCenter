@@ -6,7 +6,7 @@ import { CalendarDays, ListChecks, ShoppingBasket, UtensilsCrossed, Settings, Cl
 import { DateTime } from 'luxon';
 import { cn } from '@/lib/cn';
 import { useApp } from '@/lib/ctx';
-import { data } from '@/lib/data/fake';
+import { data } from '@/lib/data';
 import { useQuery } from '@/lib/data/hooks';
 
 export const NAV = [

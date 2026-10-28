@@ -3,7 +3,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { Heart } from 'lucide-react';
 import { useQuery } from '@/lib/data/hooks';
-import { data } from '@/lib/data/fake';
+import { data } from '@/lib/data';
 import { PageHeader } from '@/components/shell/AppShell';
 import { Field, FabLink } from '@/components/ui/controls';
 import { Banner } from '@/components/ui/misc';

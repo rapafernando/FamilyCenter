@@ -1,7 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { errMsg, useNotice } from '@/lib/ctx';
-import { data, IS_FAKE } from '@/lib/data/fake';
+import { data, IS_FAKE } from '@/lib/data';
 import { useQuery } from '@/lib/data/hooks';
 import type { AiProviderName } from '@/lib/types';
 import { PageHeader } from '@/components/shell/AppShell';

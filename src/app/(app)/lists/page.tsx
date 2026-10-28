@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Plus, Trash2, X } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { errMsg, useNotice } from '@/lib/ctx';
-import { data } from '@/lib/data/fake';
+import { data } from '@/lib/data';
 import { useQuery } from '@/lib/data/hooks';
 import { markerAttrs } from '@/lib/marker';
 import { MARKER_PRESETS } from '@/lib/markers.generated';
