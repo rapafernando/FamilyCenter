@@ -4,8 +4,8 @@
   "private": true,
   "scripts": {
     "tokens": "node scripts/build-tokens.mjs",
-    "dev": "npm run tokens && next dev -p 3000",
-    "build": "npm run tokens && next build",
+    "dev": "next dev -p 3000",
+    "build": "next build",
     "start": "next start -p 3000",
     "typecheck": "tsc --noEmit",
     "migrate": "node scripts/migrate.mjs",
