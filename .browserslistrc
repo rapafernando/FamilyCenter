@@ -1,0 +1,6 @@
+# Baseline for old wall tablets. Safari 15.4 is iPad (6th gen, 2018) on iPadOS 15 and later.
+Safari >= 15.4
+iOS >= 15.4
+Chrome >= 90
+Firefox >= 100
+Edge >= 90

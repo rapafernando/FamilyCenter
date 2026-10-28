@@ -1,0 +1,32 @@
+@import '../styles/tokens.css';
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html { font-family: var(--font-body); background: var(--color-bg); color: var(--color-text); -webkit-text-size-adjust: 100%; -webkit-tap-highlight-color: transparent; }
+  body { margin: 0; font-size: var(--text-base); line-height: var(--leading-base); background: var(--color-bg); }
+  :focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; border-radius: var(--radius-sm); }
+  button, [role='button'], label { touch-action: manipulation; }
+  /* Wall tablets: no accidental text selection or callouts while tapping. */
+  :root[data-surface='wall'] body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+}
+
+@layer components {
+  /* The marker strike: a pen line drawn across a finished task. One of the few animated moments. */
+  .strike {
+    background-image: linear-gradient(var(--m-solid), var(--m-solid));
+    background-repeat: no-repeat; background-position: 0 58%; background-size: 0% 0.2em;
+    -webkit-box-decoration-break: clone; box-decoration-break: clone;
+    transition: background-size var(--motion-slow) var(--ease, cubic-bezier(.2,.8,.2,1));
+  }
+  .strike[data-done='true'] { background-size: 100% 0.2em; }
+
+  /* Burst when a person finishes everything. Pure CSS; off when reduced motion is on. */
+  @keyframes pop { 0% { transform: scale(.4) rotate(-20deg); opacity: 0 } 60% { transform: scale(1.25) rotate(8deg); opacity: 1 } 100% { transform: scale(1) rotate(-6deg); opacity: 1 } }
+  .star-pop { animation: pop var(--motion-slow) cubic-bezier(.2,.8,.2,1) both; }
+  @media (prefers-reduced-motion: reduce) { .star-pop { animation: none; } .strike { transition: none; } }
+}
+
+dialog::backdrop { background: var(--color-scrim); opacity: 0.6; }
+dialog:not([open]) { display: none; }
