@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
-import { AlertTriangle, BellRing, CheckCircle2, Info, OctagonAlert, Sparkles, Delete } from 'lucide-react';
+import { AlertTriangle, BellRing, CheckCircle2, Info, OctagonAlert, Sparkles, Delete, X } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { Button } from './controls';
 
@@ -57,13 +57,17 @@ export function AlertDialog({ open, title, detail, autoDismissSeconds = 60, onCl
 }
 
 /* ---------- Meal tile ---------- */
-export function MealTile({ day, slot, meals, onAdd }: { day: string; slot: string; meals: string[]; onAdd: () => void }) {
+export function MealTile({ day, slot, meals, onAdd, onRemove }: { day: string; slot: string; meals: { id: string; title: string; href?: string }[]; onAdd: () => void; onRemove?: (id: string) => void }) {
   return (
     <div className="flex min-h-[6rem] flex-col gap-1 rounded-md border-2 border-line bg-surface p-3">
       <p className="text-sm text-muted">{day} · {slot}</p>
-      {meals.length ? meals.map((m) => <p key={m} className="font-bold text-ink">{m}</p>) : (
-        <button type="button" onClick={onAdd} className="mt-auto min-h-target self-start rounded-md px-1 text-left font-bold text-accent underline">Add a meal</button>
-      )}
+      {meals.map((m) => (
+        <p key={m.id} className="flex items-start justify-between gap-1 font-bold text-ink">
+          {m.href ? <a href={m.href} className="break-words underline">{m.title}</a> : <span className="break-words">{m.title}</span>}
+          {onRemove && <button type="button" aria-label={`Remove ${m.title}, ${day} ${slot}`} onClick={() => onRemove(m.id)} className="-my-2 flex min-h-target min-w-target shrink-0 items-center justify-center text-muted"><X aria-hidden className="h-4 w-4" /></button>}
+        </p>
+      ))}
+      <button type="button" onClick={onAdd} className="mt-auto min-h-target self-start rounded-md px-1 text-left font-bold text-accent underline">{meals.length ? 'Add another' : 'Add a meal'}<span className="sr-only">, {day} {slot}</span></button>
     </div>
   );
 }

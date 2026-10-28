@@ -146,7 +146,7 @@ export default function DesignClient() {
             {Object.entries(grocery).map(([t, d]) => <ChecklistItem key={t} text={t} done={d} color="grass" onToggle={(v) => setGrocery((g) => ({ ...g, [t]: v }))} />)}
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <MealTile day="Wed" slot="Dinner" meals={['Tacos', 'Corn salad']} onAdd={() => {}} />
+            <MealTile day="Wed" slot="Dinner" meals={[{ id: 'a', title: 'Tacos' }, { id: 'b', title: 'Corn salad' }]} onAdd={() => {}} />
             <MealTile day="Thu" slot="Dinner" meals={[]} onAdd={() => {}} />
           </div>
         </Section>
