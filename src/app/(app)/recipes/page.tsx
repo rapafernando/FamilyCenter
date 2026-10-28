@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { Heart } from 'lucide-react';
 import { useQuery } from '@/lib/data/hooks';
 import { data } from '@/lib/data';
+import { useApp } from '@/lib/ctx';
 import { PageHeader } from '@/components/shell/AppShell';
 import { Field, FabLink } from '@/components/ui/controls';
 import { Banner } from '@/components/ui/misc';
@@ -11,6 +12,7 @@ import { Button } from '@/components/ui/controls';
 import { SkeletonList } from '@/components/ui/skeleton';
 
 export default function Recipes() {
+  const { isAdult } = useApp();
   const q = useQuery(() => data.listRecipes(), []);
   const [find, setFind] = useState('');
   const list = (q.data ?? []).filter((r) => (r.title + ' ' + r.category).toLowerCase().includes(find.trim().toLowerCase()));
@@ -22,7 +24,7 @@ export default function Recipes() {
       {q.loading && !q.data && <SkeletonList rows={4} />}
       {q.data && q.data.length === 0 && (
         <div className="rounded-lg border-2 border-dashed border-line-input p-6 text-center"><p className="text-lg font-bold text-ink">No recipes yet</p><p className="mb-3 text-base text-muted">Save the dinners you make again and again.</p>
-          <Link href="/recipes/new" className="inline-flex min-h-target items-center rounded-md bg-accent px-5 font-bold text-accent-on">Add a recipe</Link></div>
+          {isAdult && <Link href="/recipes/new" className="inline-flex min-h-target items-center rounded-md bg-accent px-5 font-bold text-accent-on">Add a recipe</Link>}</div>
       )}
       {q.data && q.data.length > 0 && list.length === 0 && <p className="text-base text-muted" role="status">No recipe matches “{find}”.</p>}
       <ul className="m-0 grid list-none gap-3 p-0" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(min(16rem, 100%), 1fr))' }}>
@@ -36,7 +38,7 @@ export default function Recipes() {
           </li>
         ))}
       </ul>
-      <FabLink label="Add recipe" href="/recipes/new" />
+      {isAdult && <FabLink label="Add recipe" href="/recipes/new" />}
     </>
   );
 }

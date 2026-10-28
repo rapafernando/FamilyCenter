@@ -8,10 +8,10 @@ import type { Role } from '@/lib/types';
 import { PageHeader } from '@/components/shell/AppShell';
 import { AdultGate } from '@/components/shell/AdultGate';
 import { Button, Field, Select } from '@/components/ui/controls';
+import { allZones } from '@/lib/zones';
 import { Banner } from '@/components/ui/misc';
 import { ChoiceDialog } from '@/components/ui/dialogs';
 
-const ZONES = ['America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles', 'America/Phoenix', 'America/Anchorage', 'Pacific/Honolulu', 'America/Sao_Paulo', 'Europe/London', 'Europe/Paris', 'Europe/Berlin', 'Asia/Kolkata', 'Asia/Tokyo', 'Australia/Sydney', 'Pacific/Auckland'];
 const ROLE: Record<Role, string> = { owner: 'Owner', adult: 'Adult', viewer: 'Can only look' };
 
 export default function HouseholdSettings() {
@@ -21,7 +21,7 @@ export default function HouseholdSettings() {
   const [link, setLink] = useState<{ email: string; url: string } | null>(null);
   const [h, setH] = useState({ name: household.name, timezone: household.timezone, weekStartsOn: household.weekStartsOn, defaultView: household.defaultView, location: household.location });
   const [inv, setInv] = useState({ email: '', role: 'adult' as 'adult' | 'viewer' }); const [err, setErr] = useState(''); const [gone, setGone] = useState<{ id: string; name: string } | null>(null);
-  const zones = ZONES.includes(h.timezone) ? ZONES : [h.timezone, ...ZONES];
+  const all = allZones(); const zones = all.includes(h.timezone) ? all : [h.timezone, ...all];
   const guard = async (fn: () => Promise<unknown>, ok?: string) => { setErr(''); try { await fn(); if (ok) notify({ tone: 'success', title: ok }); mem.reload(); } catch (e) { setErr(errMsg(e)); } };
   return (
     <AdultGate>

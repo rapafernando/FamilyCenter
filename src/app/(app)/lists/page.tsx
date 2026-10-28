@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { Plus, Trash2, X } from 'lucide-react';
 import { cn } from '@/lib/cn';
-import { errMsg, useNotice } from '@/lib/ctx';
+import { errMsg, useApp, useNotice } from '@/lib/ctx';
 import { data } from '@/lib/data';
 import { useQuery } from '@/lib/data/hooks';
 import { markerAttrs } from '@/lib/marker';
@@ -17,6 +17,7 @@ import { SkeletonList } from '@/components/ui/skeleton';
 
 export default function Lists() {
   const notify = useNotice();
+  const { isAdult } = useApp();
   const q = useQuery(() => data.listLists(), []);
   const [sel, setSel] = useState<string | null>(null);
   const [text, setText] = useState(''); const [err, setErr] = useState(''); const [busy, setBusy] = useState(false);
@@ -48,7 +49,7 @@ export default function Lists() {
               );
             })}
            </div>
-            <Button variant="secondary" onClick={() => setMaking((v) => !v)} aria-expanded={making}><Plus aria-hidden className="h-5 w-5" />New list</Button>
+            {isAdult && <Button variant="secondary" onClick={() => setMaking((v) => !v)} aria-expanded={making}><Plus aria-hidden className="h-5 w-5" />New list</Button>}
           </div>
           {making && (
             <AdultGate>
@@ -66,12 +67,12 @@ export default function Lists() {
             <section aria-label={list.name} {...markerAttrs(list.color)} className="max-w-[40rem] rounded-lg border-2 border-m-solid bg-surface p-3">
               <div className="mb-2 flex items-center justify-between gap-2">
                 <h2 className="truncate font-display text-xl text-ink"><span aria-hidden className="mr-2">{list.emoji}</span>{list.name}</h2>
-                {!list.isGrocery && <Button size="sm" variant="ghost" aria-label={`Delete list ${list.name}`} onClick={() => setAskDelete(true)}><Trash2 aria-hidden className="h-4 w-4" />Delete</Button>}
+                {isAdult && !list.isGrocery && <Button size="sm" variant="ghost" aria-label={`Delete list ${list.name}`} onClick={() => setAskDelete(true)}><Trash2 aria-hidden className="h-4 w-4" />Delete</Button>}
               </div>
-              <form onSubmit={add} className="mb-2 flex items-end gap-2">
+              {isAdult && <form onSubmit={add} className="mb-2 flex items-end gap-2">
                 <div className="flex-1"><Field label={`Add to ${list.name}`} value={text} onChange={(e) => setText(e.target.value)} placeholder={list.isGrocery ? 'Oat milk' : 'Sunscreen'} /></div>
                 <Button type="submit" size="lg" loading={busy}>Add</Button>
-              </form>
+              </form>}
               {list.items.length === 0 && <p className="rounded-md border-2 border-dashed border-line-input p-4 text-center text-base text-muted">Nothing here yet. Type an item above and press Add.</p>}
               <ul className="m-0 list-none p-0">
                 {open.map((i) => (

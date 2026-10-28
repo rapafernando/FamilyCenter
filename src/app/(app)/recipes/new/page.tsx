@@ -1,3 +1,4 @@
 'use client';
 import { RecipeView } from '@/components/forms/RecipeView';
-export default function NewRecipe() { return <RecipeView />; }
+import { EditorsOnly } from '@/components/shell/AdultGate';
+export default function NewRecipe() { return <EditorsOnly><RecipeView /></EditorsOnly>; }

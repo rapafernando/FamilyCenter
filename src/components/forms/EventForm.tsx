@@ -23,7 +23,7 @@ const REPEATS: { value: RepeatKind; label: string }[] = [
 const REMINDERS = [{ v: '', l: 'No reminder' }, { v: '0', l: 'When it starts' }, { v: '5', l: '5 minutes before' }, { v: '10', l: '10 minutes before' }, { v: '30', l: '30 minutes before' }, { v: '60', l: '1 hour before' }];
 
 export function EventForm({ eventId, rid, startDate }: { eventId?: string; rid?: string; startDate?: string }) {
-  const { household, profiles, today } = useApp();
+  const { household, profiles, today, isAdult } = useApp();
   const tz = household.timezone;
   const router = useRouter(); const notify = useNotice();
   const editing = !!eventId;
@@ -56,7 +56,7 @@ export function EventForm({ eventId, rid, startDate }: { eventId?: string; rid?:
   const twoWay = useMemo(() => (conns.data?.c ?? []).filter((c) => c.mode === 'two_way' && c.status !== 'needs_reauth').flatMap((c) => (conns.data?.k ?? []).filter((k) => k.connectionId === c.id && k.enabled)), [conns.data]);
   useEffect(() => { if (!editing && !f.saveTo) { const d = twoWay.find((k) => k.isDefaultTarget); if (d) set('saveTo', d.id); } }, [editing, twoWay]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const readOnly = editing && ev.data?.source === 'synced' && !((conns.data?.k ?? []).some((k) => k.id === ev.data!.calendarId && (conns.data?.c ?? []).some((c) => c.id === k.connectionId && c.mode === 'two_way')));
+  const synced = editing && ev.data?.source === 'synced' && !((conns.data?.k ?? []).some((k) => k.id === ev.data!.calendarId && (conns.data?.c ?? []).some((c) => c.id === k.connectionId && c.mode === 'two_way')));
   const recurring = !!ev.data?.rrule;
 
   const times = () => f.allDay
@@ -82,11 +82,14 @@ export function EventForm({ eventId, rid, startDate }: { eventId?: string; rid?:
   if (editing && (ev.error || (!ev.loading && !ev.data))) return <><PageHeader title="Event" back={{ href: '/calendar', label: 'Calendar' }} /><Banner tone="warning" title="This event is gone">It may have been deleted on another screen.</Banner></>;
   if (!ready) return <><PageHeader title="Event" back={{ href: '/calendar', label: 'Calendar' }} /><SkeletonList rows={5} /></>;
 
+  const viewerOnly = editing && !isAdult;
+  const readOnly = synced || viewerOnly;
   const dis = readOnly;
   return (
     <form className="mx-auto flex max-w-[40rem] flex-col gap-4" onSubmit={(e) => { e.preventDefault(); if (readOnly) return; if (editing && recurring) setAsk('save'); else save('all'); }}>
       <PageHeader title={editing ? 'Edit event' : 'New event'} back={{ href: '/calendar', label: 'Calendar' }} />
-      {readOnly && <Banner tone="info" title="This event comes from Google Calendar">It is read only here. Change it in Google Calendar, or switch the connection to two-way in More › Calendars.</Banner>}
+      {viewerOnly && <Banner tone="info" title="You can look but not change">Your role is view only. Ask the household owner if this needs to change.</Banner>}
+      {synced && <Banner tone="info" title="This event comes from Google Calendar">It is read only here. Change it in Google Calendar, or switch the connection to two-way in More › Calendars.</Banner>}
       {err && <Banner tone="danger" title="Could not save">{err}</Banner>}
       <Field label="Title" required value={f.title} disabled={dis} onChange={(e) => set('title', e.target.value)} placeholder="Soccer practice" />
       <fieldset className="m-0 flex flex-col gap-2 border-0 p-0">

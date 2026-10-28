@@ -28,7 +28,7 @@ function EventLink({ o, tz, color, person, short }: { o: Occurrence; tz: string;
 }
 
 function CalendarInner() {
-  const { household, profiles, today, surface } = useApp();
+  const { household, profiles, today, surface, isAdult } = useApp();
   const sp = useSearchParams(); const router = useRouter();
   const view = (sp.get('view') as View) || household.defaultView;
   const date = sp.get('date') || today;
@@ -77,7 +77,7 @@ function CalendarInner() {
         <div className="rounded-lg border-2 border-dashed border-line-input p-6 text-center">
           <p className="text-lg font-bold text-ink">{view === 'day' ? 'Nothing planned today' : 'Nothing planned this week'}</p>
           <p className="mb-3 text-base text-muted">Add an event and it shows up on every screen in the house.</p>
-          <Link href={`/calendar/event/new?date=${view === 'day' ? date : today}`} className="inline-flex min-h-target items-center rounded-md bg-accent px-5 font-bold text-accent-on">Add an event</Link>
+          {isAdult && <Link href={`/calendar/event/new?date=${view === 'day' ? date : today}`} className="inline-flex min-h-target items-center rounded-md bg-accent px-5 font-bold text-accent-on">Add an event</Link>}
         </div>
       )}
       {q.data && view === 'day' && total > 0 && (
@@ -125,7 +125,7 @@ function CalendarInner() {
           </div>
         </div>
       )}
-      <FabLink label="Add event" href={`/calendar/event/new?date=${view === 'day' ? date : today}`} />
+      {isAdult && <FabLink label="Add event" href={`/calendar/event/new?date=${view === 'day' ? date : today}`} />}
     </>
   );
 }

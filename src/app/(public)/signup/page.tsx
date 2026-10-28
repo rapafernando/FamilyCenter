@@ -1,18 +1,20 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { data } from '@/lib/data';
+import { allZones, browserZone, zoneLabel } from '@/lib/zones';
 import { errMsg } from '@/lib/ctx';
 import { Banner } from '@/components/ui/misc';
 import { Button, Field } from '@/components/ui/controls';
 
-const ZONES = ['America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles', 'America/Anchorage', 'Pacific/Honolulu', 'Europe/London', 'Europe/Madrid', 'America/Mexico_City', 'America/Bogota', 'America/Sao_Paulo', 'Asia/Tokyo', 'Australia/Sydney'];
 
 export default function SignUp() {
   const router = useRouter();
-  const guess = typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'America/New_York';
-  const [f, setF] = useState({ name: '', email: '', password: '', householdName: '', timezone: ZONES.includes(guess) ? guess : 'America/New_York' });
+  const [f, setF] = useState({ name: '', email: '', password: '', householdName: '', timezone: 'America/New_York' });
+  const [zones, setZones] = useState<string[]>(['America/New_York']);
+  // Chosen after the page loads so the server and the browser agree on what was drawn; the person's own zone is the starting point.
+  useEffect(() => { const z = allZones(); setZones(z); const g = browserZone(); setF((v) => (v.timezone === 'America/New_York' && z.includes(g) ? { ...v, timezone: g } : v)); }, []);
   const [err, setErr] = useState(''); const [busy, setBusy] = useState(false);
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setF((v) => ({ ...v, [k]: e.target.value }));
   return (
@@ -27,7 +29,7 @@ export default function SignUp() {
       <div className="flex flex-col gap-1">
         <label htmlFor="tz" className="text-sm font-bold">Time zone</label>
         <select id="tz" value={f.timezone} onChange={set('timezone')} className="min-h-target rounded-md border-2 border-line-input bg-surface px-3 text-base text-ink">
-          {ZONES.map((z) => <option key={z} value={z}>{z.replace('_', ' ')}</option>)}
+          {zones.map((z) => <option key={z} value={z}>{zoneLabel(z)}</option>)}
         </select>
         <p className="text-sm text-muted">Chores and “today” follow this, not the clock on each screen.</p>
       </div>

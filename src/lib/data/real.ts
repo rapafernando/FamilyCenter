@@ -7,6 +7,8 @@ import type { Data } from './fake';
 
 const READ = /^(get|list|has|verify|features|aiStatus|screensaver|preview|exportAll|pairingStatus|adImpression)/;
 
+let lastUnauthBump = 0;
+
 async function rpc(method: string, args: unknown[]): Promise<unknown> {
   const a = [...args]; while (a.length && a[a.length - 1] === undefined) a.pop(); // JSON turns undefined into null, which the server would reject
   let res: Response;
@@ -16,7 +18,9 @@ async function rpc(method: string, args: unknown[]): Promise<unknown> {
   const j = (await res.json().catch(() => null)) as { ok: boolean; r?: unknown; error?: { code: string; message: string } } | null;
   if (!j) throw new ApiError('server_error', 'The server sent an answer that could not be read. Try again in a moment.');
   if (!j.ok) {
-    if (j.error!.code === 'unauthenticated') bump();
+    // Re-read the session once so the screen can send the person to the welcome page. Bumping on every refused call made
+    // every screen re-ask, get refused, and bump again: thousands of requests a second (BUG-001).
+    if (j.error!.code === 'unauthenticated' && Date.now() - lastUnauthBump > 10_000) { lastUnauthBump = Date.now(); bump(); }
     throw new ApiError(j.error!.code, j.error!.message);
   }
   if (!READ.test(method) || (method === 'pairingStatus' && j.r === 'paired')) bump();

@@ -15,7 +15,7 @@ import { SkeletonList } from '@/components/ui/skeleton';
 const box = 'rounded-md border-2 border-line-input bg-surface p-3 text-base text-ink';
 
 export function RecipeView({ recipeId }: { recipeId?: string }) {
-  const router = useRouter(); const notify = useNotice(); const { unlocked } = useApp();
+  const router = useRouter(); const notify = useNotice(); const { unlocked, isAdult } = useApp();
   const q = useQuery(() => (recipeId ? data.getRecipe(recipeId) : Promise.resolve(null)), [recipeId]);
   const [f, setF] = useState({ title: '', category: '', description: '', ingredients: '', instructions: '', favorite: false });
   const [ready, setReady] = useState(!recipeId); const [err, setErr] = useState(''); const [busy, setBusy] = useState(false); const [ask, setAsk] = useState(false);
@@ -41,6 +41,7 @@ export function RecipeView({ recipeId }: { recipeId?: string }) {
     <form className="mx-auto flex max-w-[40rem] flex-col gap-4" onSubmit={(e) => { e.preventDefault(); save(); }}>
       <PageHeader title={recipeId ? 'Edit recipe' : 'New recipe'} back={{ href: '/recipes', label: 'Recipes' }} />
       {err && <Banner tone="danger" title="That did not work">{err}</Banner>}
+      <fieldset disabled={!isAdult} className="m-0 flex min-w-0 flex-col gap-4 border-0 p-0">
       <Field label="Name" required value={f.title} onChange={(e) => set('title', e.target.value)} placeholder="Weeknight tacos" />
       <Field label="Category" value={f.category} onChange={(e) => set('category', e.target.value)} placeholder="Dinner" />
       <Field label="Short description" value={f.description} onChange={(e) => set('description', e.target.value)} />
@@ -48,10 +49,11 @@ export function RecipeView({ recipeId }: { recipeId?: string }) {
         <p id="ing-hint" className="text-sm text-muted">One per line. {lines} {lines === 1 ? 'ingredient' : 'ingredients'}.</p></div>
       <div className="flex flex-col gap-1"><label htmlFor="steps" className="text-sm font-bold">Steps</label><textarea id="steps" rows={6} value={f.instructions} onChange={(e) => set('instructions', e.target.value)} className={box} /></div>
       <label className="flex min-h-target items-center gap-3 font-bold text-ink"><input type="checkbox" checked={f.favorite} onChange={(e) => set('favorite', e.target.checked)} className="h-6 w-6 accent-accent" /><Heart aria-hidden className="h-5 w-5" />Favorite</label>
+      </fieldset>
       <div className="flex flex-wrap items-center gap-3">
-        <Button type="submit" size="lg" loading={busy}>Save recipe</Button>
-        <Button type="button" variant="secondary" size="lg" onClick={() => router.back()}>Cancel</Button>
-        {recipeId && <Button type="button" variant="secondary" size="lg" onClick={toGrocery}><ShoppingBasket aria-hidden className="h-5 w-5" />Add to groceries</Button>}
+        {isAdult && <Button type="submit" size="lg" loading={busy}>Save recipe</Button>}
+        <Button type="button" variant="secondary" size="lg" onClick={() => router.back()}>{isAdult ? 'Cancel' : 'Close'}</Button>
+        {recipeId && isAdult && <Button type="button" variant="secondary" size="lg" onClick={toGrocery}><ShoppingBasket aria-hidden className="h-5 w-5" />Add to groceries</Button>}
         {recipeId && unlocked && <Button type="button" variant="ghost" className="ml-auto text-danger" onClick={() => setAsk(true)}>Delete</Button>}
       </div>
       <ChoiceDialog open={ask} danger title="Delete this recipe?" detail="Meals that used it stay on the plan as plain text." choices={[{ value: 'go', label: 'Delete recipe' }]}

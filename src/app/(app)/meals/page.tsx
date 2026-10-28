@@ -12,10 +12,10 @@ import { Button, Field, Select } from '@/components/ui/controls';
 import { Banner, MealTile } from '@/components/ui/misc';
 import { SkeletonList } from '@/components/ui/skeleton';
 
-const SLOTS: { id: MealSlot; label: string }[] = [{ id: 'breakfast', label: 'Breakfast' }, { id: 'lunch', label: 'Lunch' }, { id: 'dinner', label: 'Dinner' }];
+const SLOTS: { id: MealSlot; label: string }[] = [{ id: 'breakfast', label: 'Breakfast' }, { id: 'lunch', label: 'Lunch' }, { id: 'dinner', label: 'Dinner' }, { id: 'snack', label: 'Snack' }];
 
 export default function Meals() {
-  const { household, today } = useApp();
+  const { household, today, isAdult } = useApp();
   const [anchor, setAnchor] = useState(today);
   const start = startOfWeek(anchor, household.weekStartsOn); const end = addDays(start, 6);
   const days = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(start, i)), [start]);
@@ -34,7 +34,7 @@ export default function Meals() {
   }
   const body = (d: string) => SLOTS.map((s) => {
     const meals = (q.data ?? []).filter((m) => m.planDate === d && m.slot === s.id).map((m) => ({ id: m.id, title: m.title, href: m.recipeId ? `/recipes/${m.recipeId}` : undefined }));
-    return <MealTile key={s.id} day={fmtDate(d, 'ccc')} slot={s.label} meals={meals} onAdd={() => { setAdding({ date: d, slot: s.id }); setErr(''); }} onRemove={async (id) => { await data.deleteMeal(id); q.reload(); }} />;
+    return <MealTile key={s.id} day={fmtDate(d, 'ccc')} slot={s.label} meals={meals} onAdd={isAdult ? () => { setAdding({ date: d, slot: s.id }); setErr(''); } : undefined} onRemove={isAdult ? async (id) => { await data.deleteMeal(id); q.reload(); } : undefined} />;
   });
   return (
     <>

@@ -57,7 +57,7 @@ export function AlertDialog({ open, title, detail, autoDismissSeconds = 60, onCl
 }
 
 /* ---------- Meal tile ---------- */
-export function MealTile({ day, slot, meals, onAdd, onRemove }: { day: string; slot: string; meals: { id: string; title: string; href?: string }[]; onAdd: () => void; onRemove?: (id: string) => void }) {
+export function MealTile({ day, slot, meals, onAdd, onRemove }: { day: string; slot: string; meals: { id: string; title: string; href?: string }[]; onAdd?: () => void; onRemove?: (id: string) => void }) {
   return (
     <div className="flex min-h-[6rem] flex-col gap-1 rounded-md border-2 border-line bg-surface p-3">
       <p className="text-sm text-muted">{day} · {slot}</p>
@@ -67,7 +67,7 @@ export function MealTile({ day, slot, meals, onAdd, onRemove }: { day: string; s
           {onRemove && <button type="button" aria-label={`Remove ${m.title}, ${day} ${slot}`} onClick={() => onRemove(m.id)} className="-my-2 flex min-h-target min-w-target shrink-0 items-center justify-center text-muted"><X aria-hidden className="h-4 w-4" /></button>}
         </p>
       ))}
-      <button type="button" onClick={onAdd} className="mt-auto min-h-target self-start rounded-md px-1 text-left font-bold text-accent underline">{meals.length ? 'Add another' : 'Add a meal'}<span className="sr-only">, {day} {slot}</span></button>
+      {onAdd ? <button type="button" onClick={onAdd} className="mt-auto min-h-target self-start rounded-md px-1 text-left font-bold text-accent underline">{meals.length ? 'Add another' : 'Add a meal'}<span className="sr-only">, {day} {slot}</span></button> : !meals.length && <p className="mt-auto text-sm text-muted">Nothing planned</p>}
     </div>
   );
 }

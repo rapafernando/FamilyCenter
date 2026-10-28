@@ -1,3 +1,4 @@
 'use client';
 import { ChoreForm } from '@/components/forms/ChoreForm';
-export default function NewChore() { return <ChoreForm />; }
+import { EditorsOnly } from '@/components/shell/AdultGate';
+export default function NewChore() { return <EditorsOnly><ChoreForm /></EditorsOnly>; }

@@ -8,3 +8,4 @@ tsconfig.tsbuildinfo
 !.env.example
 /data
 /backups
+/e2e/results

@@ -17,7 +17,7 @@ import { markerAttrs } from '@/lib/marker';
 const GROUPS = { morning: 'Morning', afternoon: 'Afternoon', evening: 'Evening' } as const;
 
 export default function Chores() {
-  const { profiles, today } = useApp(); const notify = useNotice();
+  const { profiles, today, isAdult } = useApp(); const notify = useNotice();
   const [date, setDate] = useState(today);
   const q = useQuery(() => data.listTasksForDay(date), [date]);
   const [burst, setBurst] = useState<string | null>(null);
@@ -49,7 +49,7 @@ export default function Chores() {
         <div className="rounded-lg border-2 border-dashed border-line-input p-6 text-center">
           <p className="text-lg font-bold text-ink">No chores on this day</p>
           <p className="mb-3 text-base text-muted">Add a chore or a routine for anyone in the house.</p>
-          <Link href="/chores/new" className="inline-flex min-h-target items-center rounded-md bg-accent px-5 font-bold text-accent-on">Add a chore</Link>
+          {isAdult && <Link href="/chores/new" className="inline-flex min-h-target items-center rounded-md bg-accent px-5 font-bold text-accent-on">Add a chore</Link>}
         </div>
       )}
       <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(19rem, 100%), 1fr))' }}>
@@ -59,7 +59,7 @@ export default function Chores() {
           const chores = list.filter((x) => x.task.kind === 'chore');
           const row = (x: TaskForDay) => (
             <TaskRow key={x.task.id} title={x.task.title} emoji={x.task.emoji} color={p.color} done={x.done} stars={x.task.starValue} meta={x.task.dueTime ? `by ${x.task.dueTime}` : undefined} onToggle={(v) => toggle(x, v)}
-              trailing={<Link href={`/chores/${x.task.id}`} aria-label={`Edit ${x.task.title} for ${p.name}`} className="flex min-h-target min-w-target items-center justify-center rounded-md text-muted"><Pencil aria-hidden className="h-4 w-4" /></Link>} />
+              trailing={!isAdult ? undefined : <Link href={`/chores/${x.task.id}`} aria-label={`Edit ${x.task.title} for ${p.name}`} className="flex min-h-target min-w-target items-center justify-center rounded-md text-muted"><Pencil aria-hidden className="h-4 w-4" /></Link>} />
           );
           return (
             <section key={p.id} aria-label={p.name} {...markerAttrs(p.color)} className="flex flex-col gap-2 rounded-lg bg-m-tint p-3">
@@ -77,7 +77,7 @@ export default function Chores() {
           );
         })}
       </div>
-      <FabLink label="Add chore" href="/chores/new" />
+      {isAdult && <FabLink label="Add chore" href="/chores/new" />}
     </>
   );
 }

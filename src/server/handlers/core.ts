@@ -158,9 +158,13 @@ export const core = {
     const ms = await t.all<{ id: string; name: string; email: string; role: Role }>(
       'select u.id, coalesce(u.name, u.email) as name, u.email, m.role from household_members m join users u on u.id = m.user_id order by m.created_at');
     const inv = await t.all<{ id: string; email: string; role: 'adult' | 'viewer'; expires_at: string }>('select id, email, role, expires_at from invitations where accepted_at is null and expires_at > now() order by created_at');
+    // A wall screen shows names, never email addresses or pending invitations.
+    if (!c.userId) return { members: ms.map((m) => ({ ...m, email: '', isYou: false })), invitations: [] };
     return { members: ms.map((m) => ({ ...m, isYou: m.id === c.userId })), invitations: inv.map((i) => ({ id: i.id, email: i.email, role: i.role, token: '', expiresAt: i.expires_at })) };
   })),
   invite: def('adult', [zStr(200), z.enum(['adult', 'viewer'])], async (c, emailRaw, role) => {
+    // Giving someone a way in is a decision for a person with their own sign-in, even when a wall screen is unlocked.
+    if (!c.userId) throw new ApiError('forbidden', 'Sign in with your own account to invite someone.');
     const email = clean(emailRaw).toLowerCase();
     if (!EMAIL.test(email)) throw new ApiError('invalid_email', 'Enter an email address like name@example.com.');
     limit(`invite:${c.hid}`, 20, 86400_000);
@@ -173,7 +177,7 @@ export const core = {
     await sendMail(email, `You are invited to ${r.household}`, `You can join "${r.household}" on Family Calendar.\n\nOpen this link: ${env.baseUrl || ''}/join/${token}\n\nThe link works for 7 days.`);
     return { id: r.id, email, role, token, expiresAt: r.expiresAt };
   }, { write: true }),
-  revokeInvitation: def('adult', [zId], async (c, id) => { await tenant(c, (t) => t.exec('delete from invitations where id = $1', [id])); }, { write: true }),
+  revokeInvitation: def('adult', [zId], async (c, id) => { if (!c.userId) throw new ApiError('forbidden', 'Sign in with your own account to change invitations.'); await tenant(c, (t) => t.exec('delete from invitations where id = $1', [id])); }, { write: true }),
   setMemberRole: def('owner', [zId, z.enum(['owner', 'adult', 'viewer'])], async (c, id, role) => {
     if (id === c.userId) throw new ApiError('protected', 'You cannot change your own role.');
     if (role === 'owner') throw new ApiError('invalid', 'A household has one owner.');
