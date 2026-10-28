@@ -36,7 +36,8 @@ export default function Lists() {
       {q.loading && !q.data && <SkeletonList rows={5} />}
       {q.data && (
         <>
-          <div role="tablist" aria-label="Your lists" className="mb-3 flex flex-wrap gap-2">
+          <div className="mb-3 flex flex-wrap gap-2">
+           <div role="tablist" aria-label="Your lists" className="flex flex-wrap gap-2">
             {lists.map((l) => {
               const on = l.id === list?.id; const left = l.items.filter((i) => !i.done).length;
               return (
@@ -46,6 +47,7 @@ export default function Lists() {
                 </button>
               );
             })}
+           </div>
             <Button variant="secondary" onClick={() => setMaking((v) => !v)} aria-expanded={making}><Plus aria-hidden className="h-5 w-5" />New list</Button>
           </div>
           {making && (

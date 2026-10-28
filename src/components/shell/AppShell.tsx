@@ -81,7 +81,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }
   return (
     <div className="min-h-screen pb-24">
-      <main id="main" className="mx-auto w-full max-w-[1100px] px-4 pt-4">{children}</main>
+      <main id="main" className="mx-auto w-full max-w-[1100px] px-4 pb-16 pt-4">{children}</main>
       <nav aria-label="Main" className="fixed inset-x-0 bottom-0 z-30 flex justify-around border-t-2 border-line bg-surface pb-[env(safe-area-inset-bottom)]">
         {NAV.map(({ href, label, Icon }) => {
           const on = activeFor(path, href);

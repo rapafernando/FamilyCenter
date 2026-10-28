@@ -181,7 +181,8 @@ export function PairingCode({ code }: { code: string }) {
   return (
     <div className="flex flex-col items-center gap-3">
       <p className="text-lg text-ink">On your phone, open Linked devices and enter this code.</p>
-      <p aria-label={`Code ${code.split('').join(' ')}`} className="flex gap-2">
+      <p className="flex gap-2">
+        <span className="sr-only">Code {code.split('').join(' ')}</span>
         {code.split('').map((c, i) => (
           <span key={i} aria-hidden className="flex h-[4.5rem] w-14 items-center justify-center rounded-md border-2 border-line-input bg-surface font-display text-2xl text-ink">{c}</span>
         ))}

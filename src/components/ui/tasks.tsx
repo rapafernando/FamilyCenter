@@ -11,13 +11,13 @@ export function TaskRow({ title, emoji, color, done, stars, onToggle, locked, tr
   return (
     <div {...markerAttrs(color)} className="flex min-h-primary items-center gap-3 rounded-md bg-surface px-3 shadow-lift">
       <input id={id} type="checkbox" checked={done} disabled={locked} onChange={(e) => onToggle(e.target.checked)} className="peer sr-only" />
-      <label htmlFor={id} className="flex flex-1 cursor-pointer items-center gap-3 py-2 peer-disabled:cursor-not-allowed">
+      <label htmlFor={id} className="flex flex-1 cursor-pointer items-center gap-3 rounded-md py-2 peer-disabled:cursor-not-allowed peer-focus-visible:outline peer-focus-visible:outline-[3px] peer-focus-visible:outline-offset-2 peer-focus-visible:outline-focus">
         <span aria-hidden className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-md border-[3px] border-m-solid transition-colors duration-fast',
           done ? 'bg-m-solid text-m-on' : 'bg-surface')}>
           {done && <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>}
         </span>
         {emoji && <span aria-hidden className="text-xl">{emoji}</span>}
-        <span className={cn('strike text-base font-bold', done && 'text-muted')} data-done={done}>{title}</span>
+        <span className={cn('text-base font-bold', done && 'text-muted')}><span className="strike" data-done={done}>{title}</span></span>
         {meta && <span className="text-sm text-muted">{meta}</span>}
       </label>
       {!!stars && (
@@ -76,11 +76,11 @@ export function ChecklistItem({ text, done, color, onToggle }:
   return (
     <div {...markerAttrs(color)} className="flex min-h-target items-center border-b border-line">
       <input id={id} type="checkbox" checked={done} onChange={(e) => onToggle(e.target.checked)} className="peer sr-only" />
-      <label htmlFor={id} className="flex flex-1 cursor-pointer items-center gap-3 py-2">
+      <label htmlFor={id} className="flex flex-1 cursor-pointer items-center gap-3 rounded-sm py-2 peer-focus-visible:outline peer-focus-visible:outline-[3px] peer-focus-visible:outline-offset-2 peer-focus-visible:outline-focus">
         <span aria-hidden className={cn('flex h-7 w-7 shrink-0 items-center justify-center rounded-sm border-[3px] border-m-solid', done ? 'bg-m-solid text-m-on' : 'bg-surface')}>
           {done && <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>}
         </span>
-        <span className={cn('strike text-base', done && 'text-muted')} data-done={done}>{text}</span>
+        <span className={cn('text-base', done && 'text-muted')}><span className="strike" data-done={done}>{text}</span></span>
       </label>
     </div>
   );
