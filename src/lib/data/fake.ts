@@ -360,6 +360,7 @@ export const data = {
     });
   },
   async reloadConnection(id: string) { await wait(); commit((s) => { const c = need(s.connections.find((x) => x.id === id), 'That connection'); if (c.status === 'needs_reauth') throw new ApiError('needs_reauth', 'Google needs you to sign in again before this can sync.'); c.lastSyncedAt = nowISO(); if (c.status !== 'paused') c.status = 'ok'; }); },
+  async sendEventsToGoogle(_calendarId: string, _eventId?: string): Promise<{ sent: number; found: number; problem: string }> { await wait(); throw new ApiError('practice', 'This is practice mode. Sending to Google works on a real server only.'); },
   async testGoogleWrite(_id: string): Promise<{ ok: boolean; steps: { label: string; ok: boolean; detail: string }[] }> { await wait(); throw new ApiError('practice', 'This is practice mode. The test works on a real server only.'); },
   async checkToken(id: string): Promise<Connection> { await wait(); return commit((s) => { const c = need(s.connections.find((x) => x.id === id), 'That connection'); c.tokenCheckedAt = nowISO(); return clone(c); }); },
   async removeConnection(id: string) { await wait(); commit((s) => { const calIds = new Set(s.calendars.filter((c) => c.connectionId === id).map((c) => c.id)); s.events = s.events.filter((e) => !(e.calendarId && calIds.has(e.calendarId))); s.calendars = s.calendars.filter((c) => c.connectionId !== id); s.connections = s.connections.filter((c) => c.id !== id); }); },

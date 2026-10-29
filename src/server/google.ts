@@ -445,6 +445,36 @@ export const connections = {
     }
     return finish();
   }),
+  /** Sends events that exist only in this app to a Google calendar (for events made before the connection went both ways, or while it was not able to save). */
+  sendEventsToGoogle: def('adult', [zId, zId.optional()], async (c, calendarId, eventId) => {
+    limit(`gwsend:${c.userId ?? c.deviceId}`, 20, 600_000);
+    const target = await tenant(c, (t) => writableCalendar(t, calendarId));
+    type Row = { id: string; title: string; description: string | null; location: string | null; all_day: boolean; starts_at: string | Date; ends_at: string | Date; tz: string; rrule: string | null; alert_minutes: number[] };
+    const rows = await tenant(c, (t) => t.all<Row>(
+      `select id, title, description, location, all_day, starts_at, ends_at, tz, rrule, alert_minutes from events
+        where source = 'local' and ($1::uuid is null or id = $1::uuid) and ($1::uuid is not null or rrule is not null or ends_at > now() - interval '30 days')
+        order by starts_at limit 200`, [eventId ?? null]));
+    let sent = 0; let problem = '';
+    if (rows.length === 0) return { sent, found: 0, problem };
+    const iso = (v: string | Date) => new Date(v).toISOString();
+    try {
+      const token = await refreshToken(c.hid!, target.conn_id, 'app');
+      for (const e of rows) {
+        const r = await gfetch(token, `/calendars/${encodeURIComponent(target.external_id)}/events`, { method: 'POST', body: toGoogle({ title: e.title, description: e.description, location: e.location, allDay: e.all_day, startsAt: iso(e.starts_at), endsAt: iso(e.ends_at), tz: e.tz, rrule: e.rrule, alertMinutes: e.alert_minutes ?? [] }) });
+        const g = r.json as GEvent;
+        if (!g?.id) throw new ApiError('google_refused', 'Google did not accept an event, so it was not sent.');
+        await tenant(c, async (t) => {
+          await t.exec('delete from events where calendar_id = $1 and external_id = $2 and id <> $3', [calendarId, g.id, e.id]); // the next sync may already have brought it back
+          await t.exec("update events set source = 'synced', calendar_id = $2, external_id = $3, external_etag = $4, external_updated_at = now() where id = $1", [e.id, calendarId, g.id, g.etag ?? null]);
+        });
+        sent++;
+      }
+    } catch (e) {
+      try { googleFailure(e); } catch (x) { problem = (x as Error).message; }
+    }
+    if (problem && sent === 0 && eventId) throw new ApiError('google_refused', problem);
+    return { sent, found: rows.length, problem };
+  }, { write: true }),
   reloadConnection: def('settings', [zId], async (c, id) => {
     const cur = await getConn(c, id);
     if (cur.status === 'needs_reauth') throw new ApiError('needs_reauth', 'Google needs you to sign in again before this can sync.');

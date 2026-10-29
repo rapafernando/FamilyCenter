@@ -23,10 +23,12 @@ export default function Calendars() {
   const cals = useQuery(() => data.listSyncedCalendars(), []);
   const feat = useQuery(() => data.features(), []);
   const [test, setTest] = useState<{ id: string; ok: boolean; steps: { label: string; ok: boolean; detail: string }[] } | null>(null); const [testing, setTesting] = useState<string | null>(null);
+  const [sending, setSending] = useState<string | null>(null); const [sentMsg, setSentMsg] = useState<{ id: string; text: string } | null>(null);
   const [err, setErr] = useState(''); const [mode, setMode] = useState<'one_way' | 'two_way'>('two_way'); const [busy, setBusy] = useState(false);
   const [removing, setRemoving] = useState<Connection | null>(null);
   const reloadAll = () => { conns.reload(); cals.reload(); };
   const runTest = async (id: string) => { setErr(''); setTesting(id); setTest(null); try { const r = await data.testGoogleWrite(id); setTest({ id, ...r }); } catch (e) { setErr(errMsg(e)); } finally { setTesting(null); } };
+  const runSend = async (connId: string, calId: string) => { setErr(''); setSending(connId); setSentMsg(null); try { const r = await data.sendEventsToGoogle(calId); setSentMsg({ id: connId, text: r.found === 0 ? 'Nothing to send. Every event here is already in Google.' : `Sent ${r.sent} of ${r.found} events to Google.${r.problem ? ' ' + r.problem : ''}` }); reloadAll(); } catch (e) { setErr(errMsg(e)); } finally { setSending(null); } };
   const guard = async (fn: () => Promise<unknown>, done?: string) => { setErr(''); try { await fn(); if (done) notify({ tone: 'success', title: done }); reloadAll(); } catch (e) { setErr(errMsg(e)); reloadAll(); } };
   // Google sends the browser back here with ?google=connected (or a reason it did not work).
   useEffect(() => {
@@ -82,6 +84,15 @@ export default function Calendars() {
                   </div>
                 )}
               </div>
+              {c.mode === 'two_way' && mine.some((k) => k.isDefaultTarget) && (
+                <div className="flex flex-col gap-2">
+                  <div className="flex flex-wrap items-center gap-2 text-sm text-muted">
+                    <span>Events added here before this was connected both ways are only in this app.</span>
+                    <Button size="sm" variant="secondary" loading={sending === c.id} onClick={() => runSend(c.id, mine.find((k) => k.isDefaultTarget)!.id)}>Send them to Google</Button>
+                  </div>
+                  {sentMsg?.id === c.id && <p className="m-0 font-bold text-ink" role="status">{sentMsg.text}</p>}
+                </div>
+              )}
               <Switch label="Let changes here go back to Google" checked={c.mode === 'two_way'} onChange={(v) => guard(() => data.updateConnection(c.id, { mode: v ? 'two_way' : 'one_way' }))} />
               <fieldset className="m-0 flex flex-col gap-2 border-0 p-0"><legend className="mb-1 font-display text-lg text-ink">Calendars in this account</legend>
                 {mine.length === 0 && <p className="text-base text-muted">No calendars found in this account.</p>}

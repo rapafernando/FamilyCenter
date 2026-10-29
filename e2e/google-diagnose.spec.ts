@@ -81,3 +81,55 @@ test('GD-5 no calendar chosen for new events is reported', async ({ page, proble
   expect(r.steps.at(-1).label).toContain('A calendar is chosen');
   checkProblems(problems);
 });
+
+async function localEvent(page: any, title: string) {
+  const ps = await must<any[]>(page, 'listProfiles');
+  const r = await rpc(page, 'createEvent', [{ profileId: ps.find((p: any) => p.kind === 'household').id, categoryId: null, title, description: '', location: '', allDay: false, startsAt: `${isoDay(2)}T15:00:00.000Z`, endsAt: `${isoDay(2)}T16:00:00.000Z`, tz: TZ, rrule: null, alertMinutes: [], saveToCalendarId: null }]);
+  expect(r.ok).toBe(true);
+  return (r as any).result?.id ?? sql(`select id from events where title = '${title}'`);
+}
+const row = (title: string) => sql(`select source || ',' || coalesce(external_id,'') from events where title = '${title}'`);
+
+test('GS-1 events that only exist in the app are sent to Google from Settings, once, and nothing is left behind', async ({ page, problems }) => {
+  await signUp(page, { tz: TZ });
+  await connect(page);
+  const a = 'Only here A ' + Date.now().toString(36), b = 'Only here B ' + Date.now().toString(36);
+  await localEvent(page, a); await localEvent(page, b);
+  expect(row(a)).toBe('local,');
+  await page.goto('/settings/calendars');
+  await page.getByRole('button', { name: 'Send them to Google' }).click();
+  await expect(page.getByText('Sent 2 of 2 events to Google.')).toBeVisible();
+  expect(row(a)).toMatch(/^synced,new-/); expect(row(b)).toMatch(/^synced,new-/);
+  expect(sql(`select count(*) from events where title in ('${a}','${b}')`)).toBe('2'); // a following sync does not duplicate them
+  await must(page, 'reloadConnection', [(await must<any[]>(page, 'listConnections'))[0].id]);
+  expect(sql(`select count(*) from events where title in ('${a}','${b}')`)).toBe('2');
+  await page.getByRole('button', { name: 'Send them to Google' }).click();
+  await expect(page.getByText('Nothing to send.')).toBeVisible();
+  checkProblems(problems);
+});
+
+test('GS-2 an app-only event says so on its own page, can be sent from there, and then says where it is in Google', async ({ page, problems }) => {
+  await signUp(page, { tz: TZ });
+  await connect(page);
+  const t = 'One event ' + Date.now().toString(36);
+  const id = await localEvent(page, t);
+  await page.goto(`/calendar/event/${id}`);
+  await expect(page.getByRole('note').filter({ hasText: 'only in this app' })).toBeVisible();
+  await page.getByRole('button', { name: 'Send to Google Calendar' }).click();
+  await expect(page.getByRole('note').filter({ hasText: 'saved in Google Calendar' })).toBeVisible();
+  expect(row(t)).toMatch(/^synced,new-/);
+  checkProblems(problems);
+});
+
+test('GS-3 when Google refuses, the event stays in the app and the reason is shown', async ({ page, problems, allowProblems }) => {
+  await signUp(page, { tz: TZ });
+  await connect(page);
+  const t = 'Refused send ' + Date.now().toString(36);
+  const id = await localEvent(page, t);
+  await fg({ set: { writeError: { status: 403, reason: 'insufficientPermissions', message: 'Insufficient Permission' } } });
+  await page.goto(`/calendar/event/${id}`);
+  await page.getByRole('button', { name: 'Send to Google Calendar' }).click();
+  await expect(page.getByText('permission to edit events').first()).toBeVisible();
+  expect(row(t)).toBe('local,');
+  allowProblems();
+});

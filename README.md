@@ -6,7 +6,7 @@ Built with Next.js 15 and Postgres 16, run with Docker Compose. The screensaver 
 
 This guide installs it on a fresh **Ubuntu Server 24.04** (22.04 works the same). Every command is meant to be pasted one at a time.
 
-> **Honest status:** the app and its tests (123 browser tests, 83 database-isolation checks, 42 checks of the update helper) were run against stand-in servers for Google, Google Photos, GitHub, email and AI. The Docker files and the update helper's real `docker` calls were written and checked for syntax but were **not run end to end** where this was built (the helper's logic was tested with a stand-in for `docker`), so your first install and your first update are the real test. The troubleshooting section at the end lists what to look at if something fails.
+> **Honest status:** the app and its tests (126 browser tests, 83 database-isolation checks, 42 checks of the update helper) were run against stand-in servers for Google, Google Photos, GitHub, email and AI. The Docker files and the update helper's real `docker` calls were written and checked for syntax but were **not run end to end** where this was built (the helper's logic was tested with a stand-in for `docker`), so your first install and your first update are the real test. The troubleshooting section at the end lists what to look at if something fails.
 
 ## What you need
 
@@ -140,6 +140,8 @@ Done once, by you, in your own Google account. The app never sees your Google pa
 6. Open **Settings, Calendars** and press **Connect Google**. "Both ways" is the default: Google events show in the app, and events you add or change in the app are saved to Google too. Choose "Show events only" if you want Google to stay untouched.
 
 Both ways saves new events to the calendar marked **Save new events here** (the account's main calendar is chosen for you; change it in Settings, Calendars). The Add event form has an "Also save to Google Calendar" box set to that calendar, and explains when it cannot. Calendars that are read only in Google (holidays, other people's) cannot receive events. Events that were added in the app before it was connected both ways stay only in the app.
+
+**Events that are only in the app:** open an event: it says either "saved in Google Calendar, in <calendar>" or "only in this app", and the second has a **Send to Google Calendar** button. In **Settings, Calendars**, **Send them to Google** does the same for all of them at once (upcoming and recent events, up to 200 at a time; press it again for more). Only events already sent are changed, and nothing is sent twice.
 
 **If events you add do not show up in Google:** open **Settings, Calendars** and press **Test saving to Google** under the connection. It checks, one line at a time, that the connection is both ways, that Google gave permission to edit events, that a calendar is chosen for new events, and then really creates a small test event in Google and removes it again. The first line marked with a cross says what to do. The usual causes are: an older connection still set to "Show events only" (turn on "Let changes here go back to Google", then press Reconnect and leave every permission box ticked on Google's screen), and the Google Calendar API being switched off in your Google Cloud project (APIs and Services, Library, Google Calendar API, Enable).
 

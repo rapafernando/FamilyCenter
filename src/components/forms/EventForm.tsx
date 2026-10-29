@@ -59,8 +59,9 @@ export function EventForm({ eventId, rid, startDate }: { eventId?: string; rid?:
 
   // new events go to the default Google calendar when there is a two-way one
   const twoWay = useMemo(() => (conns.data?.c ?? []).filter((c) => c.mode === 'two_way' && c.status !== 'needs_reauth').flatMap((c) => (conns.data?.k ?? []).filter((k) => k.connectionId === c.id && k.enabled && k.canWrite)), [conns.data]);
-  useEffect(() => { if (!editing && !f.saveTo) { const d = twoWay.find((k) => k.isDefaultTarget) ?? twoWay[0]; if (d) set('saveTo', d.id); } }, [editing, twoWay]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (!f.saveTo) { const d = twoWay.find((k) => k.isDefaultTarget) ?? twoWay[0]; if (d) set('saveTo', d.id); } }, [editing, twoWay]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const [sending, setSending] = useState(false);
   const synced = editing && ev.data?.source === 'synced' && !((conns.data?.k ?? []).some((k) => k.id === ev.data!.calendarId && (conns.data?.c ?? []).some((c) => c.id === k.connectionId && c.mode === 'two_way')));
   const recurring = !!ev.data?.rrule;
 
@@ -77,6 +78,13 @@ export function EventForm({ eventId, rid, startDate }: { eventId?: string; rid?:
       else { await data.createEvent({ ...common, tz, rrule, saveToCalendarId: f.saveTo || null }); notify({ tone: 'success', title: 'Event added', body: f.saveTo ? 'It will also appear in Google Calendar.' : undefined }); }
       router.push(`/calendar?date=${f.date}`);
     } catch (e) { setErr(errMsg(e)); setBusy(false); setAsk(null); }
+  }
+  async function sendToGoogle() {
+    if (!f.saveTo || !eventId) return;
+    setSending(true); setErr('');
+    try { await data.sendEventsToGoogle(f.saveTo, eventId); notify({ tone: 'success', title: 'Sent to Google Calendar' }); ev.reload(); conns.reload(); }
+    catch (e) { setErr(errMsg(e)); }
+    setSending(false);
   }
   async function remove(scope: Scope) {
     setBusy(true); setErr(''); gone.current = true;
@@ -122,6 +130,20 @@ export function EventForm({ eventId, rid, startDate }: { eventId?: string; rid?:
       {(cats.data?.length ?? 0) > 0 && <Select label="Category" value={f.categoryId} disabled={dis} onChange={(e) => set('categoryId', e.target.value)}><option value="">None</option>{cats.data!.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</Select>}
       <Field label="Where" value={f.location} disabled={dis} onChange={(e) => set('location', e.target.value)} />
       <div className="flex flex-col gap-1"><label htmlFor="notes" className="text-sm font-bold">Notes</label><textarea id="notes" rows={3} value={f.description} disabled={dis} onChange={(e) => set('description', e.target.value)} className="rounded-md border-2 border-line-input bg-surface p-3 text-base text-ink" /></div>
+      {editing && ev.data && (() => {
+        const k = (conns.data?.k ?? []).find((x) => x.id === ev.data!.calendarId);
+        if (ev.data.source === 'synced' && k) return <p className="rounded-md bg-accent-tint p-3 text-sm text-ink" role="note">This event is saved in Google Calendar, in “{k.name}”.</p>;
+        if (ev.data.source === 'local' && twoWay.length > 0 && !viewerOnly) return (
+          <div className="flex flex-col gap-2 rounded-md bg-accent-tint p-3" role="note">
+            <p className="m-0 text-sm text-ink">This event is only in this app. It is not in Google Calendar.</p>
+            <div className="flex flex-wrap items-end gap-3">
+              <Select label="Send to" value={f.saveTo} onChange={(e) => set('saveTo', e.target.value)}>{twoWay.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</Select>
+              <Button type="button" variant="secondary" loading={sending} onClick={sendToGoogle}>Send to Google Calendar</Button>
+            </div>
+          </div>
+        );
+        return null;
+      })()}
       {!editing && twoWay.length === 0 && (conns.data?.c.length ?? 0) > 0 && (() => {
         const c = conns.data!.c;
         const why = c.some((x) => x.mode === 'two_way' && x.status === 'needs_reauth') ? 'Google needs you to sign in again, so this event will be saved here only.'
