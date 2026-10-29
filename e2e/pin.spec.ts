@@ -1,6 +1,22 @@
+import { execFileSync } from 'node:child_process';
 import { test, expect, signUp, signIn, signOut, rpc, must, sql, email, PASSWORD, PIN, checkProblems, joinAs, readPairingCode, linkScreen } from './fixtures';
 
 test.describe('Settings need the parent PIN', () => {
+  test('PIN-R a forgotten PIN is reset on the server with the owner’s email, and only an owner’s', async ({ page, browser, problems }) => {
+    const em = await signUp(page, { household: 'Forgot Pin House' });
+    const run = (who: string, pin = '1357') => { try { return execFileSync('npx', ['tsx', 'scripts/reset-pin.mts', who], { env: { ...process.env, NEW_PIN: pin }, stdio: 'pipe' }).toString(); } catch (e: any) { return 'FAILED ' + e.stderr?.toString(); } };
+    expect(run('nobody-here@example.test')).toContain('not the owner');
+    const viewer = await joinAs(page, browser, 'Can only look', 'Viewer');
+    expect(run(viewer.email)).toContain('not the owner'); // a member who is not an owner cannot use it to take over
+    await viewer.ctx.close();
+    expect(run(em, '12')).toContain('exactly 4 digits');
+    expect((await rpc(page, 'verifyPin', ['2468'])).r).toBe(true);
+    expect(run(em)).toContain('New parent PIN: 1357');
+    expect((await rpc(page, 'verifyPin', ['2468'])).r).toBe(false);
+    expect((await rpc(page, 'verifyPin', ['1357'])).r).toBe(true);
+    checkProblems(problems);
+  });
+
   test('PIN-1 sign-up asks for a 4-digit parent PIN and will not continue without one', async ({ page, problems, allowProblems }) => {
     const hn = `Pinless ${Date.now()}`;
     await page.goto('/signup');

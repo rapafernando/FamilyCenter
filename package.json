@@ -12,8 +12,10 @@
     "seed": "tsx scripts/seed.mts",
     "worker": "tsx src/server/worker.ts",
     "reset-password": "tsx scripts/reset-password.mts",
+    "reset-pin": "tsx scripts/reset-pin.mts",
     "backup": "tsx scripts/backup.mts",
-    "test:isolation": "tsx tests/isolation.test.mts"
+    "test:isolation": "tsx tests/isolation.test.mts",
+    "test:updater": "bash tests/updater.test.sh"
   },
   "dependencies": {
     "@fontsource-variable/atkinson-hyperlegible-next": "^5.3.0",

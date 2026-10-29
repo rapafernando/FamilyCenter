@@ -1,6 +1,13 @@
 # Run everything on one computer:   docker compose up -d --build
 # First: copy .env.example to .env and fill it in (see replica/backend.md, "Run it with Docker").
 # For a public address with automatic https:   docker compose --profile https up -d --build   (set DOMAIN in .env)
+# The version number is baked into the image so Settings can tell whether GitHub has something newer.
+# ./scripts/deploy.sh (and the updater) set it; a plain `docker compose up --build` works too, but then the version shows as unknown.
+x-build: &build
+  context: .
+  args:
+    APP_COMMIT: ${APP_COMMIT:-unknown}
+
 services:
   db:
     image: postgres:16
@@ -18,7 +25,7 @@ services:
       retries: 20
 
   migrate:
-    build: .
+    build: *build
     command: ["npm", "run", "migrate"]
     restart: "no"
     depends_on:
@@ -29,7 +36,7 @@ services:
       APP_WORKER_PASSWORD: ${APP_WORKER_PASSWORD}
 
   web:
-    build: .
+    build: *build
     restart: unless-stopped
     depends_on:
       migrate: { condition: service_completed_successfully }
@@ -38,14 +45,16 @@ services:
       DATABASE_URL: postgres://app_user:${APP_USER_PASSWORD}@db:5432/${POSTGRES_DB}
       WORKER_DATABASE_URL: postgres://app_worker:${APP_WORKER_PASSWORD}@db:5432/${POSTGRES_DB}
       PHOTO_DIR: /data/photos
+      UPDATE_DIR: /updates
     volumes:
       - photos:/data/photos
+      - ./updates:/updates
     ports:
       # Only this computer by default, for a Caddy/nginx on the same host. Set WEB_BIND=0.0.0.0:3000 to reach it from other devices without a proxy.
       - "${WEB_BIND:-127.0.0.1:3000}:3000"
 
   worker:
-    build: .
+    build: *build
     restart: unless-stopped
     command: ["npm", "run", "worker"]
     depends_on:

@@ -24,6 +24,10 @@ const HEX = /^#[0-9a-fA-F]{6}$/;
 
 export type PhotoImport = { id: string; albumId: string; status: 'waiting' | 'importing' | 'done' | 'failed' | 'expired' | 'cancelled'; pickerUri: string; picked: number; added: number; skipped: number; error: string };
 export type GoogleSetup = { source: 'settings' | 'env' | 'none'; clientId: string; secretSaved: boolean; secretLast4: string; status: 'testing' | 'production'; redirectUri: string; baseUrl: string; https: boolean };
+export type UpdateCheck = { at: string; ok: boolean; error: string; latest: { sha: string; short: string; message: string; date: string } | null; changes: string[]; behind: number | null; upToDate: boolean; newerThanGithub: boolean; unrelated: boolean };
+export type UpdateRun = { id: string; state: string; step: string; message: string; from: string; to: string; startedAt: string; updatedAt: string; log: string[] };
+export type UpdateStatus = { current: { commit: string; short: string; known: boolean }; repo: string; branch: string; folderReady: boolean; installed: boolean; hostHead: string; pending: boolean; run: UpdateRun | null; check: UpdateCheck | null };
+const NO_UPDATES: UpdateStatus = { current: { commit: 'unknown', short: '', known: false }, repo: 'you/FamilyCenter', branch: 'main', folderReady: false, installed: false, hostHead: '', pending: false, run: null, check: null };
 export const data = {
   /* ------------------------------------------------------------ what this server can do (the real server reports it; practice mode is all pretend) */
   /* Server settings exist only on a real server. Practice mode answers the same shapes so screens compile and read sensibly. */
@@ -31,6 +35,9 @@ export const data = {
   async saveGoogleSetup(_i: { clientId: string; clientSecret?: string; status?: 'testing' | 'production' }): Promise<{ setup: GoogleSetup; check: { ok: boolean; message: string }; warnings: string[] }> { await wait(); throw new ApiError('practice', 'This is practice mode. Google settings are saved on a real server.'); },
   async clearGoogleSetup(): Promise<GoogleSetup> { await wait(); return { source: 'none', clientId: '', secretSaved: false, secretLast4: '', status: 'testing', redirectUri: '', baseUrl: '', https: true }; },
   async testGoogleSetup(): Promise<{ ok: boolean; message: string }> { await wait(); throw new ApiError('practice', 'This is practice mode.'); },
+  async getUpdateStatus(): Promise<UpdateStatus> { await wait(); return NO_UPDATES; },
+  async checkForUpdate(): Promise<UpdateStatus> { await wait(); throw new ApiError('practice', 'This is practice mode. Updates work on a real server only.'); },
+  async requestUpdate(_o?: { rebuild?: boolean }): Promise<{ id: string }> { await wait(); throw new ApiError('practice', 'This is practice mode. Updates work on a real server only.'); },
   async startPhotosImport(_albumId: string): Promise<{ url: string }> { await wait(); throw new ApiError('practice', 'This is practice mode. Choosing photos from Google Photos needs a real server.'); },
   async getPhotosImport(_id: string): Promise<PhotoImport> { await wait(); throw new ApiError('practice', 'This is practice mode.'); },
   async cancelPhotosImport(_id: string) { await wait(); },

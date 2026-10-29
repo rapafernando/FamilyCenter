@@ -9,3 +9,4 @@ tsconfig.tsbuildinfo
 /data
 /backups
 /e2e/results
+/updates

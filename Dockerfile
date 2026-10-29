@@ -13,7 +13,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends postgresql-clie
 WORKDIR /app
 ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PHOTO_DIR=/data/photos BACKUP_DIR=/backups
 COPY --from=build --chown=node:node /app /app
-RUN mkdir -p /data/photos /backups && chown -R node:node /data /backups
+RUN mkdir -p /data/photos /backups /updates && chown -R node:node /data /backups /updates
+# Which version this image was built from (Settings, Software updates compares it with GitHub). Last, so a new version does not rebuild the layers above.
+ARG APP_COMMIT=unknown
+ENV APP_COMMIT=$APP_COMMIT
 USER node
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s CMD node -e "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"

@@ -23,6 +23,12 @@ export const env = {
   get googleRevokeUrl() { return opt('GOOGLE_REVOKE_URL', 'https://oauth2.googleapis.com/revoke'); },
   get googlePickerBase() { return opt('GOOGLE_PICKER_BASE', 'https://photospicker.googleapis.com'); },
   get googleApiBase() { return opt('GOOGLE_API_BASE', 'https://www.googleapis.com/calendar/v3'); },
+  // Software updates: which version this is, where newer ones come from, and the folder shared with the updater on the host.
+  get appCommit() { return opt('APP_COMMIT', 'unknown'); },
+  get updateDir() { return opt('UPDATE_DIR'); },
+  get updateRepo() { return opt('UPDATE_REPO', 'rapafernando/FamilyCenter'); },
+  get updateBranch() { return opt('UPDATE_BRANCH', 'main'); },
+  get updateApiBase() { return opt('UPDATE_API_BASE', 'https://api.github.com').replace(/\/$/, ''); },
   get allowDemo() { return opt('ALLOW_DEMO') === 'true'; },
   get adsDefaultOn() { return opt('ADS_DEFAULT_ON') === 'true'; },
   get allowPrivateAiUrls() { return opt('ALLOW_PRIVATE_AI_URLS', 'true') === 'true'; },

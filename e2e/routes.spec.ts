@@ -1,10 +1,10 @@
-import { test, expect, signUp, must, isoDay, a11y, checkProblems } from './fixtures';
+import { test, expect, signUp, must, isoDay, a11y, checkProblems, makeAdmin } from './fixtures';
 
 const TZ = 'America/New_York';
 
 /** One household with a bit of everything, so screens are checked filled, not just empty. */
 async function filledHouse(page: any) {
-  await signUp(page, { name: 'Rae', household: 'Sweep House', tz: TZ });
+  makeAdmin(await signUp(page, { name: 'Rae', household: 'Sweep House', tz: TZ })); // the server owner, so the server-wide pages show their real content
   const ps = await must<any[]>(page, 'listProfiles');
   const me = ps.find((p) => p.kind === 'person');
   const family = ps.find((p) => p.kind === 'household');
@@ -21,7 +21,7 @@ async function filledHouse(page: any) {
 }
 
 const SIGNED_IN = ['/calendar', '/calendar/event/new', '/chores', '/chores/new', '/lists', '/meals', '/recipes', '/recipes/new', '/rewards', '/assistant',
-  '/settings', '/settings/account', '/settings/ai', '/settings/calendars', '/settings/devices', '/settings/devices/link', '/settings/display', '/settings/household', '/settings/photos', '/settings/profiles'];
+  '/settings', '/settings/account', '/settings/ai', '/settings/calendars', '/settings/devices', '/settings/devices/link', '/settings/display', '/settings/google', '/settings/updates', '/settings/household', '/settings/photos', '/settings/profiles'];
 const PUBLIC = ['/welcome', '/signin', '/signup', '/forgot', '/privacy', '/pair', '/design'];
 
 test.describe('X-1 / X-3 every screen: accessibility, no console or server errors', () => {
