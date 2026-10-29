@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { DateTime } from 'luxon';
 import { Plus } from 'lucide-react';
+import Link from 'next/link';
 import { errMsg, useApp, useNotice } from '@/lib/ctx';
 import { data, IS_FAKE } from '@/lib/data';
 import { useQuery } from '@/lib/data/hooks';
@@ -17,7 +18,7 @@ import { SkeletonList } from '@/components/ui/skeleton';
 const ago = (iso: string | null) => (iso ? DateTime.fromISO(iso).toRelative({ style: 'long' }) ?? 'just now' : 'not yet');
 
 export default function Calendars() {
-  const { profiles } = useApp(); const notify = useNotice();
+  const { profiles, session } = useApp(); const notify = useNotice();
   const conns = useQuery(() => data.listConnections(), []);
   const cals = useQuery(() => data.listSyncedCalendars(), []);
   const feat = useQuery(() => data.features(), []);
@@ -104,7 +105,7 @@ export default function Calendars() {
           <h2 className="font-display text-lg text-ink">{conns.data?.length ? 'Add another Google account' : 'Connect Google Calendar'}</h2>
           <Segmented label="What should it do?" value={mode} onChange={setMode} options={[{ value: 'one_way', label: 'Show events only' }, { value: 'two_way', label: 'Both ways' }]} />
           <p className="text-sm text-muted">{mode === 'one_way' ? 'Google events show here. Nothing you do here changes Google.' : 'Events you add or change here are saved to Google too.'}</p>
-          {notSetUp && <Banner tone="info" title="Google sign-in is not set up on this server">Whoever runs this server needs to add a Google client ID and secret first. The steps are in the setup notes.</Banner>}
+          {notSetUp && <Banner tone="info" title="Google sign-in is not set up on this server">Whoever runs this server needs to add a Google client ID and secret first. {session.admin ? <>You can do that in <Link href="/settings/google" className="font-bold text-accent underline">Google connection</Link>.</> : 'Ask the person who set it up.'}</Banner>}
           <div><Button size="lg" loading={busy} disabled={!!notSetUp} onClick={async () => { setBusy(true); await guard(() => data.connectGoogle(mode), 'Google Calendar connected'); setBusy(false); }}><Plus aria-hidden className="h-5 w-5" />Connect Google</Button></div>
           {(IS_FAKE || feat.data?.googleOauthStatus === 'testing') && <Banner tone="warning" title="Setting up your own Google project?">If Google lists it as “Testing”, it ends the sign-in every 7 days, whatever we do. Publish the consent screen to “In production” to stop that.</Banner>}
         </section>

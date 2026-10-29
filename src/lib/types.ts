@@ -73,7 +73,7 @@ export type AiKind = 'meal_plan' | 'event_import' | 'recipe_import';
 export type AiProposalItem = { id: string; label: string; detail: string; payload: Record<string, unknown> };
 export type AiJob = { id: ID; kind: AiKind; status: 'queued' | 'running' | 'needs_review' | 'applied' | 'failed' | 'discarded'; proposal: AiProposalItem[]; error: string | null };
 
-export type Session = { user: { id: ID; name: string; email: string } | null; deviceId: ID | null; role: Role | null };
+export type Session = { user: { id: ID; name: string; email: string } | null; deviceId: ID | null; role: Role | null; /** Runs this server: may change server-wide settings (Google sign-in, updates). */ admin?: boolean };
 
 export class ApiError extends Error {
   constructor(public code: string, message: string) { super(message); }

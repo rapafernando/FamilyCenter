@@ -7,6 +7,7 @@ import { plain, withTenant, type Tx } from './db';
 import { env } from './env';
 import { decrypt, encrypt, randomToken, sign, verify } from './crypto';
 import { sendMail } from './mailer';
+import { deleteSetting, getSetting, googleConfig, putSetting } from './instance';
 import { def, tenant, zId, type Ctx, type Jar } from './rpc';
 
 type Kind = 'app' | 'worker';
@@ -14,7 +15,7 @@ const SC_LIST = 'https://www.googleapis.com/auth/calendar.calendarlist.readonly'
 const SC_READ = 'https://www.googleapis.com/auth/calendar.events.readonly';
 const SC_WRITE = 'https://www.googleapis.com/auth/calendar.events';
 const scopesFor = (mode: 'one_way' | 'two_way') => [SC_LIST, mode === 'two_way' ? SC_WRITE : SC_READ];
-export const googleConfigured = () => !!(env.googleClientId && env.googleClientSecret);
+export const googleConfigured = async (kind: Kind = 'app') => (await googleConfig(kind)).source !== 'none';
 const OAUTH_COOKIE = 'fc_oauth';
 const REAUTH_EMAIL_EVERY_MS = 3 * 86400_000;
 
@@ -27,11 +28,12 @@ export class GoogleTransientError extends Error {}
 /* ------------------------------------------------------------------ tokens */
 const accessCache = new Map<string, { token: string; exp: number }>();
 
-async function tokenRequest(params: Record<string, string>) {
+async function tokenRequest(params: Record<string, string>, kind: Kind = 'app') {
+  const cfg = await googleConfig(kind);
   let r: Response;
   try {
     r = await fetch(env.googleTokenUrl, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({ client_id: env.googleClientId, client_secret: env.googleClientSecret, ...params }), signal: AbortSignal.timeout(15_000) });
+      body: new URLSearchParams({ client_id: cfg.clientId, client_secret: cfg.clientSecret, ...params }), signal: AbortSignal.timeout(15_000) });
   } catch { throw new GoogleTransientError('Could not reach Google.'); }
   const j = (await r.json().catch(() => ({}))) as { access_token?: string; refresh_token?: string; expires_in?: number; scope?: string; error?: string };
   if (r.ok) return j;
@@ -45,7 +47,7 @@ async function refreshToken(hid: string, connId: string, kind: Kind, force = fal
   if (!force && hit && hit.exp > Date.now() + 60_000) return hit.token;
   const row = await withTenant(hid, (t) => t.one<SecretRow>('select secret_encrypted, secret_key_id from calendar_connections where id = $1', [connId]), kind);
   if (!row?.secret_encrypted || row.secret_key_id === null) throw new GoogleAuthError('no_secret');
-  const j = await tokenRequest({ grant_type: 'refresh_token', refresh_token: decrypt(row.secret_encrypted, row.secret_key_id) });
+  const j = await tokenRequest({ grant_type: 'refresh_token', refresh_token: decrypt(row.secret_encrypted, row.secret_key_id) }, kind);
   if (!j.access_token) throw new GoogleTransientError('Google sent no access token.');
   accessCache.set(connId, { token: j.access_token, exp: Date.now() + (j.expires_in ?? 3600) * 1000 });
   if (j.refresh_token) { // Google sometimes rotates the refresh token. Keep the new one.
@@ -290,7 +292,7 @@ export async function pushSyncedChange(c: Ctx & { hid: string }, eventId: string
 /* ------------------------------------------------------------------ sign-in flow */
 const b64 = (b: Buffer) => b.toString('base64url');
 export async function startGoogleConnect(c: Ctx & { hid: string }, mode: 'one_way' | 'two_way', reconnectId?: string) {
-  if (!googleConfigured()) throw new ApiError('not_configured', 'Google sign-in is not set up on this server yet. See the setup notes.');
+  if (!(await googleConfigured())) throw new ApiError('not_configured', 'Google sign-in is not set up on this server yet. See the setup notes.');
   const state = randomToken(24); const verifier = randomToken(48);
   const { createHash } = await import('node:crypto');
   const challenge = b64(createHash('sha256').update(verifier).digest());
@@ -301,7 +303,7 @@ export async function startGoogleConnect(c: Ctx & { hid: string }, mode: 'one_wa
     useMode = m.mode;
   }
   c.jar.set(OAUTH_COOKIE, sign({ s: state, v: verifier, m: useMode, r: reconnectId ?? null, h: c.hid }, 600), { maxAge: 600 });
-  const q = new URLSearchParams({ client_id: env.googleClientId, redirect_uri: `${env.baseUrl}/api/v1/sync/oauth/google/callback`, response_type: 'code', scope: scopesFor(useMode).join(' '),
+  const q = new URLSearchParams({ client_id: (await googleConfig()).clientId, redirect_uri: `${env.baseUrl}/api/v1/sync/oauth/google/callback`, response_type: 'code', scope: scopesFor(useMode).join(' '),
     access_type: 'offline', prompt: 'consent', include_granted_scopes: 'false', state, code_challenge: challenge, code_challenge_method: 'S256' });
   return { url: `${env.googleAuthUrl}?${q}` };
 }
@@ -406,7 +408,7 @@ export const connections = {
   removeConnection: def('settings', [zId], async (c, id) => {
     const row = await tenant(c, (t) => t.one<SecretRow>('select secret_encrypted, secret_key_id from calendar_connections where id = $1', [id]));
     if (!row) return;
-    if (row.secret_encrypted && row.secret_key_id !== null && googleConfigured()) { // tell Google to forget us; failure here must not block removal
+    if (row.secret_encrypted && row.secret_key_id !== null && (await googleConfigured())) { // tell Google to forget us; failure here must not block removal
       try { await fetch(env.googleRevokeUrl, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ token: decrypt(row.secret_encrypted, row.secret_key_id) }), signal: AbortSignal.timeout(8000) }); } catch { /* best effort */ }
     }
     accessCache.delete(id);

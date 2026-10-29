@@ -31,6 +31,8 @@ http.createServer(async (req, res) => {
   if (p === '/token') {
     if (S.down) return json(res, 503, { error: 'backend_error' });
     const f = new URLSearchParams(body);
+    // When a test sets the expected client (_ctl set.client), a wrong client id or secret is refused as Google does.
+    if (S.client && (f.get('client_id') !== S.client.id || f.get('client_secret') !== S.client.secret)) return json(res, 401, { error: 'invalid_client' });
     if (f.get('grant_type') === 'authorization_code') {
       const c = S.codes.get(f.get('code')); if (!c) return json(res, 400, { error: 'invalid_grant' });
       const ok = createHash('sha256').update(f.get('code_verifier') ?? '').digest('base64url') === c.challenge; if (!ok) return json(res, 400, { error: 'invalid_grant' });

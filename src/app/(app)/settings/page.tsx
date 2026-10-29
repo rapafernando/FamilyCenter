@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { CalendarSync, Users, MonitorSmartphone, SunMoon, Images, Sparkles, Home, UserCog, ChevronRight, LogOut } from 'lucide-react';
+import { CalendarSync, Users, MonitorSmartphone, SunMoon, Images, Sparkles, Home, UserCog, ChevronRight, LogOut, KeyRound, RefreshCw } from 'lucide-react';
 import { useApp } from '@/lib/ctx';
 import { data } from '@/lib/data';
 import { PageHeader } from '@/components/shell/AppShell';
@@ -9,6 +9,10 @@ import { AdultGate } from '@/components/shell/AdultGate';
 import { useQuery } from '@/lib/data/hooks';
 import { Button, Segmented } from '@/components/ui/controls';
 
+const ADMIN_ITEMS = [
+  { href: '/settings/google', label: 'Google connection', hint: 'Client ID and secret for Calendar and Photos', Icon: KeyRound },
+  { href: '/settings/updates', label: 'Software updates', hint: 'Check GitHub and update this server', Icon: RefreshCw },
+];
 const ITEMS = [
   { href: '/settings/profiles', label: 'People', hint: 'Names and colours', Icon: Users },
   { href: '/settings/calendars', label: 'Calendars', hint: 'Connect Google Calendar', Icon: CalendarSync },
@@ -28,7 +32,7 @@ export default function Settings() {
     <AdultGate anySignedIn>
       <PageHeader title="More" />
       <ul className="mb-6 flex max-w-[44rem] list-none flex-col gap-2 p-0">
-        {[...(ai.data?.available ? [{ href: '/assistant', label: 'Assistant', hint: 'Plan meals, read a note, save a recipe', Icon: Sparkles }] : []), ...ITEMS].filter((i) => isAdult || i.href === '/settings/account').map(({ href, label, hint, Icon }) => (
+        {[...(ai.data?.available ? [{ href: '/assistant', label: 'Assistant', hint: 'Plan meals, read a note, save a recipe', Icon: Sparkles }] : []), ...ITEMS, ...(session.admin ? ADMIN_ITEMS : [])].filter((i) => isAdult || i.href === '/settings/account').map(({ href, label, hint, Icon }) => (
           <li key={href}><Link href={href} className="flex min-h-primary items-center gap-4 rounded-lg border-2 border-line bg-surface p-3 hover:border-accent">
             <Icon aria-hidden className="h-7 w-7 shrink-0 text-accent" /><span className="flex-1"><span className="block text-lg font-bold text-ink">{label}</span><span className="text-base text-muted">{hint}</span></span><ChevronRight aria-hidden className="h-5 w-5 text-muted" />
           </Link></li>

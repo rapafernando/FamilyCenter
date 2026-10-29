@@ -11,6 +11,7 @@ import { media } from './media';
 import { account } from './account';
 import { connections } from '../google';
 import { ai } from '../ai';
+import { admin } from '../admin';
 import { importState } from '../seed';
 
 /** A throwaway household filled with made-up people, for trying the app. Off unless ALLOW_DEMO=true. */
@@ -32,7 +33,7 @@ let ready = false;
 export function ensureRegistry() {
   if (ready) return;
   ready = true;
-  for (const group of [core, account, calendar, family, media, connections, ai, demo]) {
+  for (const group of [core, account, calendar, family, media, connections, ai, admin, demo]) {
     for (const [name, d] of Object.entries(group)) {
       if (name in registry) throw new Error(`Two handlers are called ${name}`);
       registry[name] = d as never;

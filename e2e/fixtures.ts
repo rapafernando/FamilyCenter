@@ -77,6 +77,9 @@ export async function linkScreen(page: Page, code: string, name: string) {
   await page.getByRole('button', { name: 'Link screen' }).click();
 }
 
+/** Makes this person the one who runs the server, as the first sign-up on a new server would be. */
+export function makeAdmin(em: string) { sql(`update users set is_platform_admin = true where lower(email) = lower('${em}')`); }
+
 /** Enters the parent PIN the way the PIN pad does: the server remembers it for five minutes in this browser. */
 export async function unlockSettings(page: Page, pin = PIN) {
   const j = await rpc(page, 'verifyPin', [pin]);

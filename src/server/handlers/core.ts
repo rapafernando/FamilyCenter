@@ -4,6 +4,7 @@ import { ApiError, type Household, type Profile, type Role } from '@/lib/types';
 import { MARKER_PRESETS } from '@/lib/markers.generated';
 import { plain, withTenant } from '../db';
 import { env } from '../env';
+import { googleConfig } from '../instance';
 import { hashPassword, randomToken, sha256, sign, verify, verifyPassword } from '../crypto';
 import { COOKIE, def, limit, startSession, tenant, zDate, zHex, zId, zStr } from '../rpc';
 import { sendMail } from '../mailer';
@@ -54,11 +55,11 @@ export async function sendVerification(userId: string, email: string) {
 
 export const core = {
   /* ---------------------------------------------------------------- what this server can do */
-  features: def('public', [], async () => ({ demo: env.allowDemo, googleConfigured: !!(env.googleClientId && env.googleClientSecret), googleOauthStatus: env.googleOauthStatus, smtp: !!env.smtp(), adsDefaultOn: env.adsDefaultOn })),
+  features: def('public', [], async () => ({ demo: env.allowDemo, googleConfigured: (await googleConfig()).source !== 'none', googleOauthStatus: (await googleConfig()).status, smtp: !!env.smtp(), adsDefaultOn: env.adsDefaultOn })),
 
   /* ---------------------------------------------------------------- session */
   getSession: def('public', [], async (c) => {
-    if (c.kind === 'user') return { user: { id: c.userId!, name: c.userName!, email: c.email! }, deviceId: null, role: c.role ?? null };
+    if (c.kind === 'user') return { user: { id: c.userId!, name: c.userName!, email: c.email! }, deviceId: null, role: c.role ?? null, admin: c.platformAdmin };
     if (c.kind === 'device') return { user: null, deviceId: c.deviceId!, role: null };
     return { user: null, deviceId: null, role: null };
   }),
@@ -73,6 +74,7 @@ export const core = {
     const tz = IANAZone.isValidZone(i.timezone) ? i.timezone : 'UTC';
     const hash = await hashPassword(i.password);
     const u = await plain((t) => t.one<{ id: string; session_version: number }>('insert into users (email, name, password_hash) values ($1,$2,$3) returning id, session_version', [email, clean(i.name), hash]));
+    await plain((t) => t.exec('update users set is_platform_admin = true where id = $1 and not exists (select 1 from users where is_platform_admin)', [u!.id])); // the first person on a new server runs it
     void sendVerification(u!.id, email);
     if (i.inviteToken) { await acceptInto(c.jar, u!.id, clean(i.name), i.inviteToken); return; }
     const hid = await createHousehold(u!.id, clean(i.householdName!), clean(i.name), tz, await hashPassword(i.pin!));
