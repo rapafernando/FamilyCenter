@@ -22,9 +22,11 @@ export default function Calendars() {
   const conns = useQuery(() => data.listConnections(), []);
   const cals = useQuery(() => data.listSyncedCalendars(), []);
   const feat = useQuery(() => data.features(), []);
+  const [test, setTest] = useState<{ id: string; ok: boolean; steps: { label: string; ok: boolean; detail: string }[] } | null>(null); const [testing, setTesting] = useState<string | null>(null);
   const [err, setErr] = useState(''); const [mode, setMode] = useState<'one_way' | 'two_way'>('two_way'); const [busy, setBusy] = useState(false);
   const [removing, setRemoving] = useState<Connection | null>(null);
   const reloadAll = () => { conns.reload(); cals.reload(); };
+  const runTest = async (id: string) => { setErr(''); setTesting(id); setTest(null); try { const r = await data.testGoogleWrite(id); setTest({ id, ...r }); } catch (e) { setErr(errMsg(e)); } finally { setTesting(null); } };
   const guard = async (fn: () => Promise<unknown>, done?: string) => { setErr(''); try { await fn(); if (done) notify({ tone: 'success', title: done }); reloadAll(); } catch (e) { setErr(errMsg(e)); reloadAll(); } };
   // Google sends the browser back here with ?google=connected (or a reason it did not work).
   useEffect(() => {
@@ -68,6 +70,17 @@ export default function Calendars() {
               <div className="flex flex-wrap items-center gap-2 text-sm text-muted">
                 <span>Google’s sign-in is checked every day, and renewed before it runs out.</span>
                 <Button size="sm" variant="ghost" onClick={() => guard(() => data.checkToken(c.id), 'Sign-in checked')}>Check now</Button>
+              </div>
+              <div className="flex flex-col gap-2">
+                <div><Button size="sm" variant="secondary" loading={testing === c.id} onClick={() => runTest(c.id)}>Test saving to Google</Button></div>
+                {test?.id === c.id && (
+                  <div className="rounded-md border-2 border-line bg-surface p-3" role="status" aria-label="Result of the test">
+                    <p className="font-bold text-ink">{test.ok ? 'Saving to Google works.' : 'Saving to Google does not work yet.'}</p>
+                    <ul className="m-0 mt-2 flex list-none flex-col gap-1 p-0 text-base">
+                      {test.steps.map((x) => <li key={x.label} className={x.ok ? 'text-ink' : 'font-bold text-danger'}>{x.ok ? '✓' : '✗'} {x.label}{!x.ok && x.detail ? <span className="block font-normal text-ink">{x.detail}</span> : null}</li>)}
+                    </ul>
+                  </div>
+                )}
               </div>
               <Switch label="Let changes here go back to Google" checked={c.mode === 'two_way'} onChange={(v) => guard(() => data.updateConnection(c.id, { mode: v ? 'two_way' : 'one_way' }))} />
               <fieldset className="m-0 flex flex-col gap-2 border-0 p-0"><legend className="mb-1 font-display text-lg text-ink">Calendars in this account</legend>

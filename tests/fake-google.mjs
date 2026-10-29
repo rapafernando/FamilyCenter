@@ -4,7 +4,7 @@ import http from 'node:http';
 import { createHash, randomUUID } from 'node:crypto';
 import { deflateSync } from 'node:zlib';
 
-const S = { codes: new Map(), revoked: new Set(), down: false, ver: 1, events: new Map(), log: [], expireSync: false, lastToken: null, denyNext: false, picker: { sessions: new Map(), done: false, gone: false, pick: ['p1', 'p2', 'p3', 'vid', 'bad'] } };
+const S = { codes: new Map(), revoked: new Set(), down: false, ver: 1, events: new Map(), log: [], expireSync: false, lastToken: null, denyNext: false, writeError: null, picker: { sessions: new Map(), done: false, gone: false, pick: ['p1', 'p2', 'p3', 'vid', 'bad'] } };
 const now = () => new Date().toISOString();
 const day = (n) => new Date(Date.now() + n * 86400e3).toISOString().slice(0, 10);
 const put = (e) => { S.ver++; S.events.set(e.id, { ...e, _v: S.ver, etag: `"e${S.ver}"`, updated: now() }); return S.events.get(e.id); };
@@ -102,6 +102,8 @@ http.createServer(async (req, res) => {
       const items = [...S.events.values()].filter((e) => e._v > since && (st || e.status !== 'cancelled')).map(({ _v, updated, ...e }) => ({ ...e, updated }));
       return json(res, 200, { items, nextSyncToken: 'v' + S.ver });
     }
+    // A test can make Google refuse every write the way it really does (_ctl set.writeError = {status, reason, message}).
+    if (S.writeError && req.method !== 'GET') { const w = S.writeError; return json(res, w.status, { error: { code: w.status, message: w.message ?? 'refused', errors: [{ reason: w.reason ?? 'forbidden' }] } }); }
     if (req.method === 'POST') { const b = JSON.parse(body); const e = put({ id: 'new-' + randomUUID().slice(0, 8), status: 'confirmed', ...b }); return json(res, 200, { id: e.id, etag: e.etag }); }
     if (req.method === 'PATCH') { const cur = S.events.get(id); if (!cur) return json(res, 404, {}); if (req.headers['if-match'] && req.headers['if-match'] !== cur.etag) return json(res, 412, {}); const e = put({ ...cur, ...JSON.parse(body) }); return json(res, 200, { id: e.id, etag: e.etag }); }
     if (req.method === 'DELETE') { const cur = S.events.get(id); if (!cur) return json(res, 410, {}); put({ ...cur, status: 'cancelled' }); res.writeHead(204); return res.end(); }

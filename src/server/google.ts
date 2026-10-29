@@ -8,7 +8,7 @@ import { env } from './env';
 import { decrypt, encrypt, randomToken, sign, verify } from './crypto';
 import { sendMail } from './mailer';
 import { deleteSetting, getSetting, googleConfig, putSetting } from './instance';
-import { def, tenant, zId, type Ctx, type Jar } from './rpc';
+import { def, limit, tenant, zId, type Ctx, type Jar } from './rpc';
 
 type Kind = 'app' | 'worker';
 const SC_LIST = 'https://www.googleapis.com/auth/calendar.calendarlist.readonly';
@@ -99,12 +99,24 @@ async function gfetch(token: string, path: string, init: { method?: string; body
   if (r.status === 401) throw new GoogleAuthError('401');
   if (r.status === 204) return { status: 204, json: null as never };
   const json = await r.json().catch(() => ({})) as never;
-  if (!r.ok && ![404, 410, 412].includes(r.status)) {
-    const reason = (json as { error?: { errors?: { reason?: string }[] } })?.error?.errors?.[0]?.reason;
-    if (r.status === 403 && reason && !/rate|quota/i.test(reason)) throw new ApiError('google_denied', 'Google did not allow that. Reconnect and approve all the requested permissions.');
-    throw new GoogleTransientError(`Google answered ${r.status}.`);
-  }
+  const writing = (init.method ?? 'GET') !== 'GET';
+  if (!r.ok && !([404, 410, 412].includes(r.status) && !(writing && r.status === 404 && init.method !== 'DELETE'))) throw googleError(r.status, json);
   return { status: r.status, json };
+}
+
+/** Turns Google's refusal into words a person can act on. Only trouble that is worth trying again later is "transient". */
+function googleError(status: number, json: unknown): Error {
+  const e = (json as { error?: { message?: string; errors?: { reason?: string }[]; status?: string } })?.error;
+  const reason = e?.errors?.[0]?.reason ?? e?.status ?? ''; const msg = (e?.message ?? '').slice(0, 200);
+  if (status === 403 && /rate|quota/i.test(reason)) return new GoogleTransientError(`Google answered ${status}.`);
+  if (status === 403 && /accessNotConfigured|has not been used|is disabled|SERVICE_DISABLED/i.test(reason + ' ' + msg))
+    return new ApiError('google_api_off', 'The Google Calendar API is switched off in your Google Cloud project. In Google Cloud Console open APIs and Services, Library, find Google Calendar API and press Enable.');
+  if (status === 403 && /insufficient|scope|forbidden|permission/i.test(reason + ' ' + msg))
+    return new ApiError('google_denied', 'Google did not give this app permission to edit events. Press Reconnect under Settings, Calendars, and on Google’s screen leave every box ticked (especially “See, edit, share, and permanently delete all the calendars you can access”).');
+  if (status === 403) return new ApiError('google_denied', `Google did not allow that${msg ? `: ${msg}` : ''}. Reconnect and approve all the requested permissions.`);
+  if (status === 404 || status === 410) return new ApiError('google_not_found', 'Google could not find that calendar or event. It may have been removed in Google; reload the calendars in Settings, Calendars.');
+  if (status === 400) return new ApiError('google_refused', `Google refused this event${msg ? `: ${msg}` : ''}.`);
+  return new GoogleTransientError(`Google answered ${status}.`);
 }
 
 type GEvent = { id: string; etag?: string; status?: string; summary?: string; description?: string; location?: string; start?: { date?: string; dateTime?: string; timeZone?: string }; end?: { date?: string; dateTime?: string; timeZone?: string };
@@ -272,6 +284,7 @@ export async function pushEventToGoogle(c: Ctx & { hid: string }, i: PushInput):
     const token = await refreshToken(c.hid, target.conn_id, 'app');
     const r = await gfetch(token, `/calendars/${encodeURIComponent(target.external_id)}/events`, { method: 'POST', body: toGoogle({ ...i, description: i.description, location: i.location }) });
     const g = r.json as GEvent;
+    if (!g?.id) throw new ApiError('google_refused', 'Google did not accept this event, so it was not saved.');
     return await tenant(c, async (t) => (await t.one<{ id: string }>(
       `insert into events (household_id, calendar_id, profile_id, category_id, title, description, location, all_day, starts_at, ends_at, tz, rrule, alert_minutes, source, external_id, external_etag, external_updated_at, created_by)
        values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'synced',$14,$15,now(),$16) returning id`,
@@ -404,6 +417,34 @@ export const connections = {
     });
     if (p.enabled === true) void tenant(c, (t) => t.one<{ connection_id: string }>('select connection_id from synced_calendars where id = $1', [id])).then((r) => r && syncConnection(c.hid, r.connection_id)).catch(() => {});
   }, { write: true }),
+  /** Walks through everything saving to Google needs, in plain words, and finishes by really saving a test event to Google and deleting it again. */
+  testGoogleWrite: def('settings', [zId], async (c, id) => {
+    limit(`gwtest:${c.userId ?? c.deviceId}`, 12, 600_000);
+    const steps: { label: string; ok: boolean; detail: string }[] = [];
+    const step = (label: string, ok: boolean, detail = '') => { steps.push({ label, ok, detail }); return ok; };
+    const conn = await tenant(c, (t) => t.one<{ mode: string; status: string; scopes: string[] | null }>("select mode, status, array(select jsonb_array_elements_text(sync_state->'scopes')) as scopes from calendar_connections where id = $1", [id]));
+    if (!conn) throw new ApiError('not_found', 'That connection was not found.');
+    const finish = () => ({ ok: steps.every((s) => s.ok), steps });
+    if (!step('This connection sends changes to Google', conn.mode === 'two_way', 'It is set to show Google events only. Turn on “Let changes here go back to Google”, then press Reconnect.')) return finish();
+    if (!step('Signed in to Google', conn.status !== 'needs_reauth', 'Google needs you to sign in again. Press Reconnect.')) return finish();
+    if (!step('Google gave permission to edit events', (conn.scopes ?? []).includes(SC_WRITE), 'The sign-in only allowed reading. Press Reconnect, and on Google’s screen leave every box ticked.')) return finish();
+    const target = await tenant(c, (t) => t.one<{ id: string; name: string; external_id: string; enabled: boolean; can_write: boolean }>('select id, name, external_id, enabled, can_write from synced_calendars where connection_id = $1 and is_default_target', [id]));
+    if (!step('A calendar is chosen for new events', !!target, 'Open a calendar below and choose “Save new events here”.') || !target) return finish();
+    if (!step(`“${target.name}” can receive events`, target.enabled && target.can_write, target.can_write ? 'That calendar is switched off here. Switch it on.' : 'That calendar is read only in Google. Choose another one.')) return finish();
+    try {
+      const token = await refreshToken(c.hid!, id, 'app');
+      const tomorrow = DateTime.now().plus({ days: 1 }).toISODate()!; const after = DateTime.now().plus({ days: 2 }).toISODate()!;
+      const r = await gfetch(token, `/calendars/${encodeURIComponent(target.external_id)}/events`, { method: 'POST', body: { summary: 'FamilyCenter test (removed right away)', start: { date: tomorrow }, end: { date: after } } });
+      const made = (r.json as GEvent)?.id;
+      if (!step('Google accepts a new event', !!made, 'Google answered without saving it.') || !made) return finish();
+      await gfetch(token, `/calendars/${encodeURIComponent(target.external_id)}/events/${encodeURIComponent(made)}`, { method: 'DELETE' });
+      step('The test event was removed again', true);
+    } catch (e) {
+      const msg = e instanceof ApiError ? e.message : e instanceof GoogleAuthError ? 'Google needs you to sign in again. Press Reconnect.' : 'Google Calendar could not be reached from the server. Check its internet connection.';
+      step('Google accepts a new event', false, msg);
+    }
+    return finish();
+  }),
   reloadConnection: def('settings', [zId], async (c, id) => {
     const cur = await getConn(c, id);
     if (cur.status === 'needs_reauth') throw new ApiError('needs_reauth', 'Google needs you to sign in again before this can sync.');
