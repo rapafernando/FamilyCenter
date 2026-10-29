@@ -28,7 +28,7 @@ export class GoogleTransientError extends Error {}
 /* ------------------------------------------------------------------ tokens */
 const accessCache = new Map<string, { token: string; exp: number }>();
 
-async function tokenRequest(params: Record<string, string>, kind: Kind = 'app') {
+export async function tokenRequest(params: Record<string, string>, kind: Kind = 'app') {
   const cfg = await googleConfig(kind);
   let r: Response;
   try {
@@ -302,6 +302,7 @@ export async function startGoogleConnect(c: Ctx & { hid: string }, mode: 'one_wa
     if (!m) throw new ApiError('not_found', 'That connection was not found.');
     useMode = m.mode;
   }
+  c.jar.delete('fc_oauth_photos');
   c.jar.set(OAUTH_COOKIE, sign({ s: state, v: verifier, m: useMode, r: reconnectId ?? null, h: c.hid }, 600), { maxAge: 600 });
   const q = new URLSearchParams({ client_id: (await googleConfig()).clientId, redirect_uri: `${env.baseUrl}/api/v1/sync/oauth/google/callback`, response_type: 'code', scope: scopesFor(useMode).join(' '),
     access_type: 'offline', prompt: 'consent', include_granted_scopes: 'false', state, code_challenge: challenge, code_challenge_method: 'S256' });

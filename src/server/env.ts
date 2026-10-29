@@ -21,6 +21,7 @@ export const env = {
   get googleAuthUrl() { return opt('GOOGLE_AUTH_URL', 'https://accounts.google.com/o/oauth2/v2/auth'); },
   get googleTokenUrl() { return opt('GOOGLE_TOKEN_URL', 'https://oauth2.googleapis.com/token'); },
   get googleRevokeUrl() { return opt('GOOGLE_REVOKE_URL', 'https://oauth2.googleapis.com/revoke'); },
+  get googlePickerBase() { return opt('GOOGLE_PICKER_BASE', 'https://photospicker.googleapis.com'); },
   get googleApiBase() { return opt('GOOGLE_API_BASE', 'https://www.googleapis.com/calendar/v3'); },
   get allowDemo() { return opt('ALLOW_DEMO') === 'true'; },
   get adsDefaultOn() { return opt('ADS_DEFAULT_ON') === 'true'; },

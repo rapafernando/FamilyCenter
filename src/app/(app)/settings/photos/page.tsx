@@ -10,6 +10,7 @@ import { Button, Field, Switch } from '@/components/ui/controls';
 import { Banner } from '@/components/ui/misc';
 import { ChoiceDialog } from '@/components/ui/dialogs';
 import { SkeletonList } from '@/components/ui/skeleton';
+import { GooglePhotos } from '@/components/forms/GooglePhotos';
 
 const MAX_SIDE = 1920;
 /** Shrinks a picture in the browser before it is sent, so uploads stay quick on a home connection. */
@@ -53,6 +54,7 @@ export default function Photos() {
       <PageHeader title="Photos" back={{ href: '/settings', label: 'Settings' }} />
       <p className="mb-3 max-w-[40rem] text-base text-muted">Photos in albums marked “Show on screens” play when a screen is idle.</p>
       <input ref={files} type="file" accept="image/*" multiple className="sr-only" tabIndex={-1} aria-hidden onChange={(e) => upload(e.target.files)} />
+      <GooglePhotos albums={(q.data ?? []).map((a) => ({ id: a.id, name: a.name }))} onImported={q.reload} />
       {err && <div className="mb-3 max-w-[40rem]"><Banner tone="danger" title="That did not work">{err}</Banner></div>}
       {q.loading && !q.data && <SkeletonList rows={3} />}
       {q.error && <Banner tone="danger" title="Could not load albums" action={<Button size="sm" onClick={q.reload}>Try again</Button>}>Try again in a moment.</Banner>}

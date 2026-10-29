@@ -22,6 +22,7 @@ const need = <T,>(v: T | undefined | null, what: string): T => { if (v == null) 
 const clean = (s: string) => s.trim();
 const HEX = /^#[0-9a-fA-F]{6}$/;
 
+export type PhotoImport = { id: string; albumId: string; status: 'waiting' | 'importing' | 'done' | 'failed' | 'expired' | 'cancelled'; pickerUri: string; picked: number; added: number; skipped: number; error: string };
 export type GoogleSetup = { source: 'settings' | 'env' | 'none'; clientId: string; secretSaved: boolean; secretLast4: string; status: 'testing' | 'production'; redirectUri: string; baseUrl: string; https: boolean };
 export const data = {
   /* ------------------------------------------------------------ what this server can do (the real server reports it; practice mode is all pretend) */
@@ -30,6 +31,9 @@ export const data = {
   async saveGoogleSetup(_i: { clientId: string; clientSecret?: string; status?: 'testing' | 'production' }): Promise<{ setup: GoogleSetup; check: { ok: boolean; message: string }; warnings: string[] }> { await wait(); throw new ApiError('practice', 'This is practice mode. Google settings are saved on a real server.'); },
   async clearGoogleSetup(): Promise<GoogleSetup> { await wait(); return { source: 'none', clientId: '', secretSaved: false, secretLast4: '', status: 'testing', redirectUri: '', baseUrl: '', https: true }; },
   async testGoogleSetup(): Promise<{ ok: boolean; message: string }> { await wait(); throw new ApiError('practice', 'This is practice mode.'); },
+  async startPhotosImport(_albumId: string): Promise<{ url: string }> { await wait(); throw new ApiError('practice', 'This is practice mode. Choosing photos from Google Photos needs a real server.'); },
+  async getPhotosImport(_id: string): Promise<PhotoImport> { await wait(); throw new ApiError('practice', 'This is practice mode.'); },
+  async cancelPhotosImport(_id: string) { await wait(); },
   async features() { await wait(); return { demo: true, googleConfigured: false, googleOauthStatus: 'testing' as 'testing' | 'production', smtp: false, adsDefaultOn: false }; },
   async previewInvitation(token: string): Promise<{ householdName: string; email: string; role: 'adult' | 'viewer' }> { await wait(); const i = need(getState().invitations.find((x) => x.token === token), 'That invitation'); return { householdName: getState().household.name, email: i.email, role: i.role }; },
   async acceptInvitation(token: string) { await wait(); void token; throw new ApiError('unavailable', 'Invitations need the real server.'); },

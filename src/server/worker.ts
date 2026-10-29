@@ -40,6 +40,7 @@ async function cleanup() {
     await t.exec("update ai_jobs set input = '{}'::jsonb, input_purge_at = null where input_purge_at is not null and input_purge_at < now()");
     await t.exec("delete from ai_jobs where created_at < now() - interval '30 days'");
     await t.exec("delete from job_failures where created_at < now() - interval '90 days'");
+    await t.exec("delete from photo_imports where created_at < now() - interval '2 days'");
   }, 'worker');
   // Sample households last one day.
   const old = await plain((t) => t.all<{ id: string }>("select id from users where email like 'demo-%@demo.invalid' and created_at < now() - interval '24 hours'"), 'worker');

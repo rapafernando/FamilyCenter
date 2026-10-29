@@ -22,6 +22,31 @@ export function sniffImage(b: Buffer): Kind | null {
   if (b.length > 12 && /^GIF8[79]a/.test(b.subarray(0, 6).toString('latin1'))) return { mime: 'image/gif', ext: 'gif' };
   return null;
 }
+/** Width and height from the picture's own header, so imported pictures need no trust in what the sender says. */
+export function imageSize(b: Buffer): { width: number; height: number } | null {
+  try {
+    if (b[0] === 0x89 && b[1] === 0x50) return { width: b.readUInt32BE(16), height: b.readUInt32BE(20) };
+    if (b[0] === 0xff && b[1] === 0xd8) {
+      let i = 2;
+      while (i + 9 < b.length) {
+        if (b[i] !== 0xff) { i++; continue; }
+        const m = b[i + 1];
+        if (m >= 0xc0 && m <= 0xcf && ![0xc4, 0xc8, 0xcc].includes(m)) return { height: b.readUInt16BE(i + 5), width: b.readUInt16BE(i + 7) };
+        i += 2 + b.readUInt16BE(i + 2);
+      }
+      return null;
+    }
+    if (b.subarray(0, 4).toString('latin1') === 'RIFF') {
+      const t = b.subarray(12, 16).toString('latin1');
+      if (t === 'VP8X') return { width: 1 + b.readUIntLE(24, 3), height: 1 + b.readUIntLE(27, 3) };
+      if (t === 'VP8 ') return { width: b.readUInt16LE(26) & 0x3fff, height: b.readUInt16LE(28) & 0x3fff };
+      if (t === 'VP8L') { const v = b.readUInt32LE(21); return { width: (v & 0x3fff) + 1, height: ((v >> 14) & 0x3fff) + 1 }; }
+      return null;
+    }
+    if (b.subarray(0, 3).toString('latin1') === 'GIF') return { width: b.readUInt16LE(6), height: b.readUInt16LE(8) };
+  } catch { /* fall through */ }
+  return null;
+}
 export const photoPath = (hid: string, key: string) => join(env.photoDir, hid, key);
 const dataUrl = z.string().max(Math.ceil(MAX_PHOTO_BYTES * 1.4) + 100).regex(/^data:image\/(jpeg|png|webp|gif);base64,[A-Za-z0-9+/=]+$/);
 export const photoUrl = (id: string) => `/api/photo/${id}`;
