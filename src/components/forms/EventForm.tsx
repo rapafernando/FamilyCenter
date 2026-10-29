@@ -1,5 +1,7 @@
 'use client';
-import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import type { EventItem } from '@/lib/types';
 import { useRouter } from 'next/navigation';
 import { DateTime } from 'luxon';
 import { cn } from '@/lib/cn';
@@ -27,9 +29,12 @@ export function EventForm({ eventId, rid, startDate }: { eventId?: string; rid?:
   const tz = household.timezone;
   const router = useRouter(); const notify = useNotice();
   const editing = !!eventId;
-  const ev = useQuery(() => (eventId ? data.getEvent(eventId) : Promise.resolve(null)), [eventId]);
+  // Once this event is deleted the form must not ask the server for it again (that answer is "not found", and it shows up as an error while the page is leaving).
+  const gone = useRef(false); const lastEv = useRef<EventItem | null>(null);
+  const ev = useQuery(async () => { if (gone.current) return lastEv.current; const e = eventId ? await data.getEvent(eventId) : null; lastEv.current = e; return e; }, [eventId]);
   const occ = useQuery(async () => {
     if (!eventId || !rid) return null;
+    if (gone.current) return null;
     const list = await data.listEvents({ from: DateTime.fromISO(rid).minus({ days: 1 }).toISO()!, to: DateTime.fromISO(rid).plus({ days: 2 }).toISO()! });
     return list.find((o) => o.eventId === eventId && o.recurrenceId === rid) ?? null;
   }, [eventId, rid]);
@@ -53,8 +58,8 @@ export function EventForm({ eventId, rid, startDate }: { eventId?: string; rid?:
   }, [editing, ev.data, occ.data, occ.loading, ready, tz]);
 
   // new events go to the default Google calendar when there is a two-way one
-  const twoWay = useMemo(() => (conns.data?.c ?? []).filter((c) => c.mode === 'two_way' && c.status !== 'needs_reauth').flatMap((c) => (conns.data?.k ?? []).filter((k) => k.connectionId === c.id && k.enabled)), [conns.data]);
-  useEffect(() => { if (!editing && !f.saveTo) { const d = twoWay.find((k) => k.isDefaultTarget); if (d) set('saveTo', d.id); } }, [editing, twoWay]); // eslint-disable-line react-hooks/exhaustive-deps
+  const twoWay = useMemo(() => (conns.data?.c ?? []).filter((c) => c.mode === 'two_way' && c.status !== 'needs_reauth').flatMap((c) => (conns.data?.k ?? []).filter((k) => k.connectionId === c.id && k.enabled && k.canWrite)), [conns.data]);
+  useEffect(() => { if (!editing && !f.saveTo) { const d = twoWay.find((k) => k.isDefaultTarget) ?? twoWay[0]; if (d) set('saveTo', d.id); } }, [editing, twoWay]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const synced = editing && ev.data?.source === 'synced' && !((conns.data?.k ?? []).some((k) => k.id === ev.data!.calendarId && (conns.data?.c ?? []).some((c) => c.id === k.connectionId && c.mode === 'two_way')));
   const recurring = !!ev.data?.rrule;
@@ -74,9 +79,9 @@ export function EventForm({ eventId, rid, startDate }: { eventId?: string; rid?:
     } catch (e) { setErr(errMsg(e)); setBusy(false); setAsk(null); }
   }
   async function remove(scope: Scope) {
-    setBusy(true); setErr('');
+    setBusy(true); setErr(''); gone.current = true;
     try { await data.deleteEvent(eventId!, recurring ? scope : 'all', rid); notify({ tone: 'success', title: 'Event deleted' }); router.push(`/calendar?date=${f.date}`); }
-    catch (e) { setErr(errMsg(e)); setBusy(false); setAsk(null); }
+    catch (e) { gone.current = false; setErr(errMsg(e)); setBusy(false); setAsk(null); }
   }
 
   if (editing && (ev.error || (!ev.loading && !ev.data))) return <><PageHeader title="Event" back={{ href: '/calendar', label: 'Calendar' }} /><Banner tone="warning" title="This event is gone">It may have been deleted on another screen.</Banner></>;
@@ -117,6 +122,13 @@ export function EventForm({ eventId, rid, startDate }: { eventId?: string; rid?:
       {(cats.data?.length ?? 0) > 0 && <Select label="Category" value={f.categoryId} disabled={dis} onChange={(e) => set('categoryId', e.target.value)}><option value="">None</option>{cats.data!.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</Select>}
       <Field label="Where" value={f.location} disabled={dis} onChange={(e) => set('location', e.target.value)} />
       <div className="flex flex-col gap-1"><label htmlFor="notes" className="text-sm font-bold">Notes</label><textarea id="notes" rows={3} value={f.description} disabled={dis} onChange={(e) => set('description', e.target.value)} className="rounded-md border-2 border-line-input bg-surface p-3 text-base text-ink" /></div>
+      {!editing && twoWay.length === 0 && (conns.data?.c.length ?? 0) > 0 && (() => {
+        const c = conns.data!.c;
+        const why = c.some((x) => x.mode === 'two_way' && x.status === 'needs_reauth') ? 'Google needs you to sign in again, so this event will be saved here only.'
+          : c.every((x) => x.mode === 'one_way') ? 'Google Calendar is connected for viewing only, so this event will be saved here only.'
+          : 'No Google calendar is switched on to receive new events, so this event will be saved here only.';
+        return <p className="rounded-md bg-accent-tint p-3 text-sm text-ink" role="note">{why} <Link href="/settings/calendars" className="font-bold text-accent underline">Calendar settings</Link></p>;
+      })()}
       {!editing && twoWay.length > 0 && (
         <Select label="Also save to Google Calendar" value={f.saveTo} onChange={(e) => set('saveTo', e.target.value)}><option value="">No, keep it here only</option>{twoWay.map((k) => <option key={k.id} value={k.id}>{k.name}</option>)}</Select>
       )}

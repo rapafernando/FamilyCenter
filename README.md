@@ -6,7 +6,7 @@ Built with Next.js 15 and Postgres 16, run with Docker Compose. The screensaver 
 
 This guide installs it on a fresh **Ubuntu Server 24.04** (22.04 works the same). Every command is meant to be pasted one at a time.
 
-> **Honest status:** the app and its tests (111 browser tests, 83 database-isolation checks, 42 checks of the update helper) were run against stand-in servers for Google, Google Photos, GitHub, email and AI. The Docker files and the update helper's real `docker` calls were written and checked for syntax but were **not run end to end** where this was built (the helper's logic was tested with a stand-in for `docker`), so your first install and your first update are the real test. The troubleshooting section at the end lists what to look at if something fails.
+> **Honest status:** the app and its tests (115 browser tests, 83 database-isolation checks, 42 checks of the update helper) were run against stand-in servers for Google, Google Photos, GitHub, email and AI. The Docker files and the update helper's real `docker` calls were written and checked for syntax but were **not run end to end** where this was built (the helper's logic was tested with a stand-in for `docker`), so your first install and your first update are the real test. The troubleshooting section at the end lists what to look at if something fails.
 
 ## What you need
 
@@ -136,7 +136,9 @@ Done once, by you, in your own Google account. The app never sees your Google pa
 3. Configure the **OAuth consent screen** (External). Add your own Google account as a **test user**.
 4. Create an **OAuth client ID** of type **Web application**. Under Authorised redirect URIs paste the address from step 1. It is your `BASE_URL` plus `/api/v1/sync/oauth/google/callback`, and Google only accepts it when it starts with `https://` (or is `localhost`).
 5. Back in the app, paste the **client ID** and **client secret** and press **Save and check**. The app asks Google right away whether it accepts them, so a typo shows up now and not later. The secret is stored encrypted and never shown again.
-6. Open **Settings, Calendars** and press **Connect Google**.
+6. Open **Settings, Calendars** and press **Connect Google**. "Both ways" is the default: Google events show in the app, and events you add or change in the app are saved to Google too. Choose "Show events only" if you want Google to stay untouched.
+
+Both ways saves new events to the calendar marked **Save new events here** (the account's main calendar is chosen for you; change it in Settings, Calendars). The Add event form has an "Also save to Google Calendar" box set to that calendar, and explains when it cannot. Calendars that are read only in Google (holidays, other people's) cannot receive events. Events that were added in the app before it was connected both ways stay only in the app.
 
 Putting `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` in `.env` still works; what you save in the app wins over `.env`.
 

@@ -61,7 +61,7 @@ export type Connection = {
   id: ID; provider: 'google'; mode: 'one_way' | 'two_way'; displayName: string; accountEmail: string; status: ConnStatus;
   lastSyncedAt: ISOTime | null; tokenCheckedAt: ISOTime | null; tokenFailures: number; lastError: string | null; connectedAt: ISOTime;
 };
-export type SyncedCalendar = { id: ID; connectionId: ID; externalId: string; name: string; color: string; enabled: boolean; profileId: ID | null; isDefaultTarget: boolean };
+export type SyncedCalendar = { id: ID; connectionId: ID; externalId: string; name: string; color: string; enabled: boolean; canWrite: boolean; profileId: ID | null; isDefaultTarget: boolean };
 
 export type Device = { id: ID; nickname: string; kind: 'display' | 'browser'; lastSeenAt: ISOTime | null; createdAt: ISOTime; config: { theme?: 'auto' | 'light' | 'dark'; idleMinutes?: number } };
 export type Member = { id: ID; name: string; email: string; role: Role; isYou: boolean };

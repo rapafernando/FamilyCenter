@@ -131,8 +131,8 @@ export function seed(): State {
     tasks, completions, rewards, stars, lists, items, recipes, meals, albums, photos, campaigns,
     connections: [{ id: connId, provider: 'google', mode: 'one_way', displayName: 'Google Calendar', accountEmail: 'family@gmail.com', status: 'ok', lastSyncedAt: iso(now.minus({ minutes: 2 })), tokenCheckedAt: iso(now.set({ hour: 3, minute: 15 })), tokenFailures: 0, lastError: null, connectedAt: iso(now.minus({ days: 20 })) }],
     calendars: [
-      { id: calId, connectionId: connId, externalId: 'family@gmail.com', name: 'Family', color: M.grape, enabled: true, profileId: null, isDefaultTarget: false },
-      { id: uid(), connectionId: connId, externalId: 'work@group.calendar.google.com', name: 'Sam’s work', color: M.grass, enabled: true, profileId: P.sam, isDefaultTarget: false },
+      { id: calId, connectionId: connId, externalId: 'family@gmail.com', name: 'Family', color: M.grape, enabled: true, canWrite: true, profileId: null, isDefaultTarget: false },
+      { id: uid(), connectionId: connId, externalId: 'work@group.calendar.google.com', name: 'Sam’s work', color: M.grass, enabled: true, canWrite: true, profileId: P.sam, isDefaultTarget: false },
     ],
     devices: [],
     members: [{ id: you, name: 'Sam', email: 'sam@example.com', role: 'owner', isYou: true }, { id: uid(), name: 'Jo', email: 'jo@example.com', role: 'adult', isYou: false }],

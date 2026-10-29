@@ -212,10 +212,11 @@ export async function syncConnection(hid: string, connId: string, kind: Kind = '
     const list = ((await gfetch(token, '/users/me/calendarList?minAccessRole=reader&maxResults=250')).json as { items?: GCal[] }).items ?? [];
     await withTenant(hid, async (t) => {
       for (const c of list) {
-        await t.exec(`insert into synced_calendars (household_id, connection_id, external_id, name, color, enabled) values ($1,$2,$3,$4,$5,$6)
-          on conflict (connection_id, external_id) do update set name = excluded.name, color = excluded.color`,
-          [hid, connId, c.id, (c.summaryOverride ?? c.summary ?? c.id).slice(0, 120), hex(c.backgroundColor), !!c.primary]);
+        await t.exec(`insert into synced_calendars (household_id, connection_id, external_id, name, color, enabled, can_write, is_primary) values ($1,$2,$3,$4,$5,$6,$7,$8)
+          on conflict (connection_id, external_id) do update set name = excluded.name, color = excluded.color, can_write = excluded.can_write, is_primary = excluded.is_primary`,
+          [hid, connId, c.id, (c.summaryOverride ?? c.summary ?? c.id).slice(0, 120), hex(c.backgroundColor), !!c.primary, c.accessRole === 'owner' || c.accessRole === 'writer', !!c.primary]);
       }
+      await ensureDefaultTarget(t, connId);
       const ids = list.map((c) => c.id);
       await t.exec('delete from synced_calendars where connection_id = $1 and not (external_id = any($2))', [connId, ids]);
     }, kind);
@@ -243,11 +244,20 @@ const toGoogle = (i: { title: string; description: string | null; location: stri
     reminders: { useDefault: false, overrides: i.alertMinutes.map((m) => ({ method: 'popup', minutes: m })) },
   };
 };
+/** A two-way connection must have somewhere to save new events. If nothing is chosen yet, use the account's main calendar (or the first one that can be written to). */
+async function ensureDefaultTarget(t: Tx, connId: string) {
+  await t.exec(`update synced_calendars set is_default_target = true
+      where id = (select s.id from synced_calendars s join calendar_connections cc on cc.id = s.connection_id
+                   where s.connection_id = $1 and cc.mode = 'two_way' and cc.status <> 'needs_reauth' and s.enabled and s.can_write
+                   order by s.is_primary desc, s.created_at limit 1)
+        and not exists (select 1 from synced_calendars d where d.is_default_target)`, [connId]);
+}
 async function writableCalendar(t: Tx, calendarId: string) {
-  const r = await t.one<{ external_id: string; conn_id: string; mode: string; status: string }>('select s.external_id, cc.id as conn_id, cc.mode, cc.status from synced_calendars s join calendar_connections cc on cc.id = s.connection_id where s.id = $1', [calendarId]);
+  const r = await t.one<{ external_id: string; conn_id: string; mode: string; status: string; can_write: boolean }>('select s.external_id, s.can_write, cc.id as conn_id, cc.mode, cc.status from synced_calendars s join calendar_connections cc on cc.id = s.connection_id where s.id = $1', [calendarId]);
   if (!r) throw new ApiError('not_found', 'That Google calendar was not found.');
   if (r.mode !== 'two_way') throw new ApiError('read_only', 'New events can only be saved to Google when the connection is two-way.');
   if (r.status === 'needs_reauth') throw new ApiError('needs_reauth', 'Google needs you to sign in again before this can sync.');
+  if (!r.can_write) throw new ApiError('read_only', 'This Google calendar is read only for your account (for example a holiday calendar), so events cannot be saved to it. Choose another calendar.');
   return r;
 }
 const googleFailure = (e: unknown): never => {
@@ -357,9 +367,9 @@ const getConn = async (c: Ctx & { hid: string }, id: string) => {
 
 export const connections = {
   listConnections: def('read', [], async (c) => (await tenant(c, (t) => t.all<CRow>(`select ${CCOLS} from calendar_connections order by created_at`))).map(mapConn)),
-  listSyncedCalendars: def('read', [], async (c): Promise<SyncedCalendar[]> => (await tenant(c, (t) => t.all<{ id: string; connection_id: string; external_id: string; name: string; color: string | null; enabled: boolean; profile_id: string | null; is_default_target: boolean }>(
-    'select id, connection_id, external_id, name, color, enabled, profile_id, is_default_target from synced_calendars order by created_at, name')))
-    .map((r) => ({ id: r.id, connectionId: r.connection_id, externalId: r.external_id, name: r.name, color: (r.color ?? COLOR_FALLBACK).toUpperCase(), enabled: r.enabled, profileId: r.profile_id, isDefaultTarget: r.is_default_target }))),
+  listSyncedCalendars: def('read', [], async (c): Promise<SyncedCalendar[]> => (await tenant(c, (t) => t.all<{ id: string; connection_id: string; external_id: string; name: string; color: string | null; enabled: boolean; can_write: boolean; profile_id: string | null; is_default_target: boolean }>(
+    'select id, connection_id, external_id, name, color, enabled, can_write, profile_id, is_default_target from synced_calendars order by created_at, name')))
+    .map((r) => ({ id: r.id, connectionId: r.connection_id, externalId: r.external_id, name: r.name, color: (r.color ?? COLOR_FALLBACK).toUpperCase(), enabled: r.enabled, canWrite: r.can_write, profileId: r.profile_id, isDefaultTarget: r.is_default_target }))),
   startGoogleConnect: def('settings', [z.enum(['one_way', 'two_way']), zId.optional()], async (c, mode, reconnectId) => startGoogleConnect(c, mode, reconnectId)),
   updateConnection: def('settings', [zId, z.object({ mode: z.enum(['one_way', 'two_way']).optional(), status: z.enum(['ok', 'paused']).optional() })], async (c, id, p) => {
     const cur = await getConn(c, id);
@@ -367,7 +377,7 @@ export const connections = {
       if (p.mode && p.mode !== cur.mode) {
         const scopes = (await t.one<{ s: string[] | null }>("select array(select jsonb_array_elements_text(sync_state->'scopes')) as s from calendar_connections where id = $1", [id]))?.s ?? [];
         const needsWrite = p.mode === 'two_way' && !scopes.includes(SC_WRITE);
-        if (!needsWrite) await t.exec('update calendar_connections set mode = $2 where id = $1', [id, p.mode]);
+        if (!needsWrite) { await t.exec('update calendar_connections set mode = $2 where id = $1', [id, p.mode]); if (p.mode === 'two_way') await ensureDefaultTarget(t, id); }
         else await t.exec("update calendar_connections set mode = $2, status = 'needs_reauth', last_error = 'Two-way sync needs permission to edit events. Choose Reconnect and approve it.' where id = $1", [id, p.mode]);
         if (p.mode === 'one_way') await t.exec('update synced_calendars set is_default_target = false where connection_id = $1', [id]);
       }
@@ -376,10 +386,11 @@ export const connections = {
   }, { write: true }),
   updateSyncedCalendar: def('settings', [zId, z.object({ enabled: z.boolean().optional(), profileId: zId.nullable().optional(), isDefaultTarget: z.boolean().optional() })], async (c, id, p) => {
     await tenant(c, async (t) => {
-      const cal = await t.one<{ connection_id: string; mode: string; enabled: boolean }>('select s.connection_id, cc.mode, s.enabled from synced_calendars s join calendar_connections cc on cc.id = s.connection_id where s.id = $1', [id]);
+      const cal = await t.one<{ connection_id: string; mode: string; enabled: boolean; can_write: boolean }>('select s.connection_id, cc.mode, s.enabled, s.can_write from synced_calendars s join calendar_connections cc on cc.id = s.connection_id where s.id = $1', [id]);
       if (!cal) throw new ApiError('not_found', 'That calendar was not found.');
       if (p.isDefaultTarget) {
         if (cal.mode !== 'two_way') throw new ApiError('read_only', 'New events can only be saved to Google when the connection is two-way.');
+        if (!cal.can_write) throw new ApiError('read_only', 'This Google calendar is read only for your account, so new events cannot be saved to it.');
         await t.exec('update synced_calendars set is_default_target = false where is_default_target');
       }
       await t.exec('update synced_calendars set enabled = coalesce($2,enabled), is_default_target = coalesce($3,is_default_target) where id = $1', [id, p.enabled ?? null, p.isDefaultTarget ?? null]);

@@ -346,7 +346,7 @@ export const data = {
       const id = uid(); const n = s.connections.length;
       const c: Connection = { id, provider: 'google', mode, displayName: 'Google Calendar', accountEmail: n ? `partner${n}@gmail.com` : 'family@gmail.com', status: 'ok', lastSyncedAt: nowISO(), tokenCheckedAt: nowISO(), tokenFailures: 0, lastError: null, connectedAt: nowISO() };
       s.connections.push(c);
-      s.calendars.push({ id: uid(), connectionId: id, externalId: c.accountEmail, name: 'Main calendar', color: MARKER_PRESETS.sky, enabled: true, profileId: null, isDefaultTarget: false }, { id: uid(), connectionId: id, externalId: 'holidays', name: 'US holidays', color: MARKER_PRESETS.tomato, enabled: false, profileId: null, isDefaultTarget: false });
+      s.calendars.push({ id: uid(), connectionId: id, externalId: c.accountEmail, name: 'Main calendar', color: MARKER_PRESETS.sky, enabled: true, canWrite: true, profileId: null, isDefaultTarget: false }, { id: uid(), connectionId: id, externalId: 'holidays', name: 'US holidays', color: MARKER_PRESETS.tomato, enabled: false, canWrite: true, profileId: null, isDefaultTarget: false });
       return clone(c);
     });
   },

@@ -22,7 +22,7 @@ export default function Calendars() {
   const conns = useQuery(() => data.listConnections(), []);
   const cals = useQuery(() => data.listSyncedCalendars(), []);
   const feat = useQuery(() => data.features(), []);
-  const [err, setErr] = useState(''); const [mode, setMode] = useState<'one_way' | 'two_way'>('one_way'); const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(''); const [mode, setMode] = useState<'one_way' | 'two_way'>('two_way'); const [busy, setBusy] = useState(false);
   const [removing, setRemoving] = useState<Connection | null>(null);
   const reloadAll = () => { conns.reload(); cals.reload(); };
   const guard = async (fn: () => Promise<unknown>, done?: string) => { setErr(''); try { await fn(); if (done) notify({ tone: 'success', title: done }); reloadAll(); } catch (e) { setErr(errMsg(e)); reloadAll(); } };
@@ -80,7 +80,8 @@ export default function Calendars() {
                         <Select label="Show as" value={k.profileId ?? ''} onChange={(e) => guard(() => data.updateSyncedCalendar(k.id, { profileId: e.target.value || null }))}>
                           <option value="">Family</option>{people.filter((p) => p.kind === 'person').map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
                         </Select>
-                        {c.mode === 'two_way' && (
+                        {c.mode === 'two_way' && !k.canWrite && <span className="min-h-target py-2 text-sm text-muted">Read only in Google: events cannot be saved here</span>}
+                        {c.mode === 'two_way' && k.canWrite && (
                           <label className="flex min-h-target items-center gap-2 font-bold text-ink"><input type="radio" name="target" checked={k.isDefaultTarget} onChange={() => guard(() => data.updateSyncedCalendar(k.id, { isDefaultTarget: true }))} className="h-5 w-5 accent-accent" />Save new events here</label>
                         )}
                       </div>
