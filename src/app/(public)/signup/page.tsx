@@ -11,14 +11,14 @@ import { Button, Field } from '@/components/ui/controls';
 
 export default function SignUp() {
   const router = useRouter();
-  const [f, setF] = useState({ name: '', email: '', password: '', householdName: '', timezone: 'America/New_York' });
+  const [f, setF] = useState({ name: '', email: '', password: '', householdName: '', pin: '', timezone: 'America/New_York' });
   const [zones, setZones] = useState<string[]>(['America/New_York']);
   // Chosen after the page loads so the server and the browser agree on what was drawn; the person's own zone is the starting point.
   useEffect(() => { const z = allZones(); setZones(z); const g = browserZone(); setF((v) => (v.timezone === 'America/New_York' && z.includes(g) ? { ...v, timezone: g } : v)); }, []);
   const [err, setErr] = useState(''); const [busy, setBusy] = useState(false);
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setF((v) => ({ ...v, [k]: e.target.value }));
   return (
-    <form className="flex flex-col gap-4" onSubmit={async (e) => { e.preventDefault(); setBusy(true); setErr(''); try { await data.signUp(f); router.push('/settings/profiles?welcome=1'); } catch (x) { setErr(errMsg(x)); setBusy(false); } }}>
+    <form className="flex flex-col gap-4" onSubmit={async (e) => { e.preventDefault(); setBusy(true); setErr(''); try { await data.signUp(f); try { sessionStorage.setItem('fc_unlocked_until', String(Date.now() + 5 * 60000)); } catch { /* ignore */ } router.push('/settings/profiles?welcome=1'); } catch (x) { setErr(errMsg(x)); setBusy(false); } }}>
       <Link href="/welcome" className="min-h-target text-base font-bold text-accent underline">‹ Back</Link>
       <h1 className="font-display text-xl text-ink">Create your household</h1>
       {err && <Banner tone="danger" title="Could not create the household">{err}</Banner>}
@@ -26,6 +26,7 @@ export default function SignUp() {
       <Field label="Email" type="email" autoComplete="email" required value={f.email} onChange={set('email')} />
       <Field label="Password" type="password" autoComplete="new-password" required value={f.password} onChange={set('password')} hint="At least 8 characters." />
       <Field label="Household name" placeholder="The Garcia family" required value={f.householdName} onChange={set('householdName')} />
+      <Field label="Parent PIN (4 digits)" inputMode="numeric" pattern="\d{4}" maxLength={4} autoComplete="off" required value={f.pin} onChange={(e) => setF((v) => ({ ...v, pin: e.target.value.replace(/\D/g, '') }))} hint="Settings ask for this PIN on every phone and screen. Children do not need to know it." />
       <div className="flex flex-col gap-1">
         <label htmlFor="tz" className="text-sm font-bold">Time zone</label>
         <select id="tz" value={f.timezone} onChange={set('timezone')} className="min-h-target rounded-md border-2 border-line-input bg-surface px-3 text-base text-ink">

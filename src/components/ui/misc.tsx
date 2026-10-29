@@ -149,7 +149,7 @@ export function SponsorSlide({ advertiser, headline, handoff, qr, onTap, onBack,
 }
 
 /* ---------- PIN pad (parent unlock) ---------- */
-export function PinPad({ length = 4, onComplete, error }: { length?: number; onComplete: (pin: string) => void; error?: string }) {
+export function PinPad({ length = 4, onComplete, error, prompt = 'Enter the parent PIN' }: { length?: number; onComplete: (pin: string) => void; error?: string; prompt?: string }) {
   const [pin, setPin] = useState('');
   const push = (d: string) => setPin((p) => {
     const n = (p + d).slice(0, length);
@@ -163,7 +163,7 @@ export function PinPad({ length = 4, onComplete, error }: { length?: number; onC
           <span key={i} className={cn('h-5 w-5 rounded-pill border-2 border-line-input', i < pin.length ? 'bg-ink' : 'bg-surface')} />
         ))}
       </div>
-      <p className={cn('min-h-[1.5rem] text-sm', error ? 'text-danger' : 'text-muted')} role="status">{error ?? 'Enter the parent PIN'}</p>
+      <p className={cn('min-h-[1.5rem] text-sm', error ? 'text-danger' : 'text-muted')} role="status">{error ?? prompt}</p>
       <div className="grid w-full grid-cols-3 gap-3">
         {['1','2','3','4','5','6','7','8','9'].map((d) => (
           <button key={d} type="button" onClick={() => push(d)} className="min-h-primary rounded-md border-2 border-line-input bg-surface font-display text-xl text-ink active:bg-accent-tint">{d}</button>

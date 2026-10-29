@@ -5,7 +5,7 @@ import { errMsg, useApp, useNotice } from '@/lib/ctx';
 import { data } from '@/lib/data';
 import { useQuery } from '@/lib/data/hooks';
 import { PageHeader } from '@/components/shell/AppShell';
-import { AdultGate } from '@/components/shell/AdultGate';
+import { SettingsGate } from '@/components/shell/AdultGate';
 import { Button, Field, Segmented, Select, Switch } from '@/components/ui/controls';
 import { Banner } from '@/components/ui/misc';
 
@@ -20,7 +20,7 @@ export default function Display() {
   const guard = async (fn: () => Promise<unknown>, ok: string) => { setErr(''); try { await fn(); notify({ tone: 'success', title: ok }); } catch (e) { setErr(errMsg(e)); } };
   const pickTheme = (t: Theme) => { setTheme(t); try { localStorage.setItem('fc-theme', t); } catch { /* ignore */ } if (t === 'auto') delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = t; };
   return (
-    <AdultGate>
+    <SettingsGate>
       <PageHeader title="Display and ads" back={{ href: '/settings', label: 'Settings' }} />
       {err && <div className="mb-3"><Banner tone="danger" title="Could not save">{err}</Banner></div>}
       <div className="flex max-w-[40rem] flex-col gap-5">
@@ -32,12 +32,11 @@ export default function Display() {
         </section>
         <section aria-label="Parent PIN" className="flex flex-col gap-3 rounded-lg border-2 border-line bg-surface p-4">
           <h2 className="font-display text-lg text-ink">Parent PIN</h2>
-          <p className="text-base text-muted">{hasPin.data ? 'A PIN is set. Wall screens ask for it before settings open.' : 'No PIN yet. Without one, anyone at a wall screen can open settings.'}</p>
+          <p className="text-base text-muted">A PIN is set. Every phone and screen asks for it before Settings open, and again after five minutes.</p>
           <form className="flex items-end gap-2" onSubmit={(e) => { e.preventDefault(); guard(async () => { await data.setPin(pin); setPin(''); hasPin.reload(); }, 'PIN saved'); }}>
-            <div className="flex-1"><Field label={hasPin.data ? 'New PIN' : 'Choose a PIN'} inputMode="numeric" pattern="\d{4}" maxLength={4} autoComplete="off" value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))} hint="4 digits" /></div>
+            <div className="flex-1"><Field label="New PIN" inputMode="numeric" pattern="\d{4}" maxLength={4} autoComplete="off" value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))} hint="4 digits" /></div>
             <Button type="submit" disabled={pin.length !== 4}>Save PIN</Button>
           </form>
-          {hasPin.data && <div><Button variant="ghost" className="text-danger" onClick={() => guard(async () => { await data.setPin(null); hasPin.reload(); }, 'PIN removed')}>Remove PIN</Button></div>}
         </section>
         <section aria-label="Ads" className="flex flex-col gap-3 rounded-lg border-2 border-line bg-surface p-4">
           <h2 className="font-display text-lg text-ink">Ads in the photo screensaver</h2>
@@ -48,6 +47,6 @@ export default function Display() {
         </section>
         <div><Link href="/screensaver" className="inline-flex min-h-primary items-center rounded-md border-2 border-line-input bg-surface px-5 font-bold text-ink">Preview the screensaver</Link></div>
       </div>
-    </AdultGate>
+    </SettingsGate>
   );
 }

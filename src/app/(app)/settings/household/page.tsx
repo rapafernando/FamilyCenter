@@ -6,7 +6,7 @@ import { data } from '@/lib/data';
 import { useQuery } from '@/lib/data/hooks';
 import type { Role } from '@/lib/types';
 import { PageHeader } from '@/components/shell/AppShell';
-import { AdultGate } from '@/components/shell/AdultGate';
+import { SettingsGate } from '@/components/shell/AdultGate';
 import { Button, Field, Select } from '@/components/ui/controls';
 import { allZones } from '@/lib/zones';
 import { Banner } from '@/components/ui/misc';
@@ -24,7 +24,7 @@ export default function HouseholdSettings() {
   const all = allZones(); const zones = all.includes(h.timezone) ? all : [h.timezone, ...all];
   const guard = async (fn: () => Promise<unknown>, ok?: string) => { setErr(''); try { await fn(); if (ok) notify({ tone: 'success', title: ok }); mem.reload(); } catch (e) { setErr(errMsg(e)); } };
   return (
-    <AdultGate>
+    <SettingsGate>
       <PageHeader title="Household" back={{ href: '/settings', label: 'Settings' }} />
       <div className="flex max-w-[40rem] flex-col gap-5">
         {err && <Banner tone="danger" title="That did not work">{err}</Banner>}
@@ -72,6 +72,6 @@ export default function HouseholdSettings() {
         </section>
       </div>
       <ChoiceDialog open={!!gone} danger title={`Remove ${gone?.name}?`} detail="They can no longer sign in to this household." choices={[{ value: 'go', label: 'Remove person' }]} onChoose={() => { const g = gone!; setGone(null); guard(() => data.removeMember(g.id), 'Removed'); }} onCancel={() => setGone(null)} />
-    </AdultGate>
+    </SettingsGate>
   );
 }

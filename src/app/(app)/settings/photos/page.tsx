@@ -5,7 +5,7 @@ import { errMsg, useNotice } from '@/lib/ctx';
 import { data } from '@/lib/data';
 import { useQuery } from '@/lib/data/hooks';
 import { PageHeader } from '@/components/shell/AppShell';
-import { AdultGate } from '@/components/shell/AdultGate';
+import { SettingsGate } from '@/components/shell/AdultGate';
 import { Button, Field, Switch } from '@/components/ui/controls';
 import { Banner } from '@/components/ui/misc';
 import { ChoiceDialog } from '@/components/ui/dialogs';
@@ -49,7 +49,7 @@ export default function Photos() {
     finally { setBusy(null); if (files.current) files.current.value = ''; }
   }
   return (
-    <AdultGate>
+    <SettingsGate>
       <PageHeader title="Photos" back={{ href: '/settings', label: 'Settings' }} />
       <p className="mb-3 max-w-[40rem] text-base text-muted">Photos in albums marked “Show on screens” play when a screen is idle.</p>
       <input ref={files} type="file" accept="image/*" multiple className="sr-only" tabIndex={-1} aria-hidden onChange={(e) => upload(e.target.files)} />
@@ -82,6 +82,6 @@ export default function Photos() {
         ))}
       </ul>
       <ChoiceDialog open={!!gone} danger title={`Delete “${gone?.name}”?`} detail="Every picture in this album is removed." choices={[{ value: 'go', label: 'Delete album' }]} onChoose={() => { const g = gone!; setGone(null); guard(() => data.deleteAlbum(g.id)); }} onCancel={() => setGone(null)} />
-    </AdultGate>
+    </SettingsGate>
   );
 }

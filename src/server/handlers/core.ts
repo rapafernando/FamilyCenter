@@ -19,10 +19,10 @@ export const mapProfile = (r: PRow): Profile => ({ id: r.id, name: r.name, color
 const HH = 'id, name, timezone, week_starts_on, default_view, ads_enabled, ads_every_n_photos, location';
 
 /** Creates a household with its owner, the shared "Family" profile, the owner's own profile and the grocery list. */
-export async function createHousehold(userId: string, name: string, personName: string, timezone: string) {
+export async function createHousehold(userId: string, name: string, personName: string, timezone: string, pinHash: string | null = null) {
   const hid = crypto.randomUUID();
   await withTenant(hid, async (t) => {
-    await t.exec('insert into households (id, name, timezone, ads_enabled) values ($1,$2,$3,$4)', [hid, name, timezone, env.adsDefaultOn]);
+    await t.exec('insert into households (id, name, timezone, ads_enabled, parent_pin_hash) values ($1,$2,$3,$4,$5)', [hid, name, timezone, env.adsDefaultOn, pinHash]);
     await t.exec("insert into household_members (household_id, user_id, role) values ($1,$2,'owner')", [hid, userId]);
     await t.exec("insert into profiles (household_id, name, color, kind, sort_order) values ($1,'Family',$2,'household',0)", [hid, MARKER_PRESETS.graphite]);
     await t.exec("insert into profiles (household_id, name, color, kind, user_id, sort_order) values ($1,$2,$3,'person',$4,1)", [hid, personName, MARKER_PRESETS.sky, userId]);
@@ -62,20 +62,22 @@ export const core = {
     if (c.kind === 'device') return { user: null, deviceId: c.deviceId!, role: null };
     return { user: null, deviceId: null, role: null };
   }),
-  signUp: def('public', [z.object({ name: zStr(100), email: zStr(200), password: zStr(200), householdName: zStr(100).optional(), timezone: zStr(64), inviteToken: zStr(100).optional() })], async (c, i) => {
+  signUp: def('public', [z.object({ name: zStr(100), email: zStr(200), password: zStr(200), householdName: zStr(100).optional(), timezone: zStr(64), inviteToken: zStr(100).optional(), pin: zStr(8).optional() })], async (c, i) => {
     limit(`signup:${c.ip}`, 10, 3600_000);
     const email = clean(i.email).toLowerCase();
     if (!EMAIL.test(email)) throw new ApiError('invalid_email', 'Enter an email address like name@example.com.');
     if (i.password.length < 8) throw new ApiError('weak_password', 'Use at least 8 characters for the password.');
     if (!clean(i.name) || (!i.inviteToken && !clean(i.householdName ?? ''))) throw new ApiError('missing', 'Fill in your name and a name for the household.');
     if (i.inviteToken && !(await plain((t) => t.one('select 1 from invitation_by_hash($1)', [sha256(i.inviteToken!)])))) throw new ApiError('not_found', 'This invitation link has expired or was already used.');
+    if (!i.inviteToken && !/^\d{4}$/.test(i.pin ?? '')) throw new ApiError('invalid_pin', 'Choose a parent PIN of exactly 4 digits. Settings ask for it.');
     const tz = IANAZone.isValidZone(i.timezone) ? i.timezone : 'UTC';
     const hash = await hashPassword(i.password);
     const u = await plain((t) => t.one<{ id: string; session_version: number }>('insert into users (email, name, password_hash) values ($1,$2,$3) returning id, session_version', [email, clean(i.name), hash]));
     void sendVerification(u!.id, email);
     if (i.inviteToken) { await acceptInto(c.jar, u!.id, clean(i.name), i.inviteToken); return; }
-    const hid = await createHousehold(u!.id, clean(i.householdName!), clean(i.name), tz);
+    const hid = await createHousehold(u!.id, clean(i.householdName!), clean(i.name), tz, await hashPassword(i.pin!));
     startSession(c.jar, u!.id, hid, u!.session_version);
+    c.jar.set(COOKIE.unlock, sign({ h: hid }, 300), { maxAge: 300 }); // the person who just chose the PIN does not have to type it straight away
   }, { write: false }),
   signIn: def('public', [zStr(200), zStr(200)], async (c, email, password) => {
     const e = clean(email).toLowerCase();
@@ -85,7 +87,7 @@ export const core = {
     const ms = await plain((t) => t.all<{ household_id: string }>('select * from user_memberships($1)', [u.id]));
     startSession(c.jar, u.id, ms[0]?.household_id ?? null, u.session_version);
   }),
-  signOut: def('public', [], async (c) => { c.jar.delete(COOKIE.session); }),
+  signOut: def('public', [], async (c) => { c.jar.delete(COOKIE.session); c.jar.delete(COOKIE.unlock); }),
   signOutDevice: def('read', [], async (c) => {
     if (c.kind === 'device') await tenant(c, (t) => t.exec('delete from devices where id = $1', [c.deviceId]));
     c.jar.delete(COOKIE.device); c.jar.delete(COOKIE.unlock);
@@ -97,7 +99,7 @@ export const core = {
 
   /* ---------------------------------------------------------------- household */
   getHousehold: def('read', [], async (c) => mapHousehold((await tenant(c, (t) => t.one<HRow>(`select ${HH} from households where id = $1`, [c.hid])))!)),
-  updateHousehold: def('adult', [z.object({
+  updateHousehold: def('settings', [z.object({
     name: zStr(100).optional(), timezone: zStr(64).optional(), weekStartsOn: z.number().int().min(0).max(6).optional(), defaultView: z.enum(['day', 'week', 'month']).optional(),
     adsEnabled: z.boolean().optional(), adsEveryNPhotos: z.number().int().optional(), location: zStr(120).optional(),
   })], async (c, p) => {
@@ -115,13 +117,13 @@ export const core = {
 
   /* ---------------------------------------------------------------- profiles */
   listProfiles: def('read', [], async (c) => (await tenant(c, (t) => t.all<PRow>('select id, name, color, birthday, kind, star_balance from profiles where archived_at is null order by sort_order, created_at'))).map(mapProfile)),
-  createProfile: def('adult', [z.object({ name: zStr(80), color: zHex, birthday: zDate.nullable().optional(), kind: z.enum(['person', 'other']).optional() })], async (c, i) => {
+  createProfile: def('settings', [z.object({ name: zStr(80), color: zHex, birthday: zDate.nullable().optional(), kind: z.enum(['person', 'other']).optional() })], async (c, i) => {
     if (!clean(i.name)) throw new ApiError('missing', 'Give this person a name.');
     return mapProfile((await tenant(c, (t) => t.one<PRow>(
       "insert into profiles (household_id, name, color, birthday, kind, sort_order) values ($1,$2,$3,$4,$5,(select coalesce(max(sort_order),0)+1 from profiles)) returning id, name, color, birthday, kind, star_balance",
       [c.hid, clean(i.name), i.color, i.birthday || null, i.kind ?? 'person'])))!);
   }, { write: true }),
-  updateProfile: def('adult', [zId, z.object({ name: zStr(80).optional(), color: zHex.optional(), birthday: zDate.nullable().optional() })], async (c, id, p) => {
+  updateProfile: def('settings', [zId, z.object({ name: zStr(80).optional(), color: zHex.optional(), birthday: zDate.nullable().optional() })], async (c, id, p) => {
     if (p.name !== undefined && !clean(p.name)) throw new ApiError('missing', 'Give this person a name.');
     return mapProfile((await tenant(c, (t) => t.one<PRow>(
       `update profiles set name = coalesce($2, name), color = coalesce($3, color), birthday = case when $4::boolean then $5::date else birthday end where id = $1
@@ -129,7 +131,7 @@ export const core = {
       [id, p.name === undefined ? null : clean(p.name), p.color ?? null, p.birthday !== undefined, p.birthday ?? null])))
       ?? (() => { throw new ApiError('not_found', 'That profile was not found.'); })());
   }, { write: true }),
-  deleteProfile: def('adult', [zId], async (c, id) => tenant(c, async (t) => {
+  deleteProfile: def('settings', [zId], async (c, id) => tenant(c, async (t) => {
     const p = await t.one<{ name: string; kind: string }>('select name, kind from profiles where id = $1', [id]);
     if (!p) throw new ApiError('not_found', 'That profile was not found.');
     if (p.kind === 'household') throw new ApiError('protected', 'The household profile cannot be deleted.');
@@ -138,7 +140,7 @@ export const core = {
     await t.exec('delete from events where profile_id = $1', [id]); // only soft-deleted ones are left
     await t.exec('delete from profiles where id = $1', [id]);
   }), { write: true }),
-  mergeProfiles: def('adult', [zId, zId], async (c, fromId, intoId) => tenant(c, async (t) => {
+  mergeProfiles: def('settings', [zId, zId], async (c, fromId, intoId) => tenant(c, async (t) => {
     if (fromId === intoId) throw new ApiError('invalid', 'Pick two different people.');
     const from = await t.one<{ name: string; kind: string; star_balance: number }>('select name, kind, star_balance from profiles where id = $1', [fromId]);
     const into = await t.one('select id from profiles where id = $1', [intoId]);
@@ -162,7 +164,7 @@ export const core = {
     if (!c.userId) return { members: ms.map((m) => ({ ...m, email: '', isYou: false })), invitations: [] };
     return { members: ms.map((m) => ({ ...m, isYou: m.id === c.userId })), invitations: inv.map((i) => ({ id: i.id, email: i.email, role: i.role, token: '', expiresAt: i.expires_at })) };
   })),
-  invite: def('adult', [zStr(200), z.enum(['adult', 'viewer'])], async (c, emailRaw, role) => {
+  invite: def('settings', [zStr(200), z.enum(['adult', 'viewer'])], async (c, emailRaw, role) => {
     // Giving someone a way in is a decision for a person with their own sign-in, even when a wall screen is unlocked.
     if (!c.userId) throw new ApiError('forbidden', 'Sign in with your own account to invite someone.');
     const email = clean(emailRaw).toLowerCase();
@@ -177,14 +179,16 @@ export const core = {
     await sendMail(email, `You are invited to ${r.household}`, `You can join "${r.household}" on Family Calendar.\n\nOpen this link: ${env.baseUrl || ''}/join/${token}\n\nThe link works for 7 days.`);
     return { id: r.id, email, role, token, expiresAt: r.expiresAt };
   }, { write: true }),
-  revokeInvitation: def('adult', [zId], async (c, id) => { if (!c.userId) throw new ApiError('forbidden', 'Sign in with your own account to change invitations.'); await tenant(c, (t) => t.exec('delete from invitations where id = $1', [id])); }, { write: true }),
-  setMemberRole: def('owner', [zId, z.enum(['owner', 'adult', 'viewer'])], async (c, id, role) => {
+  revokeInvitation: def('settings', [zId], async (c, id) => { if (!c.userId) throw new ApiError('forbidden', 'Sign in with your own account to change invitations.'); await tenant(c, (t) => t.exec('delete from invitations where id = $1', [id])); }, { write: true }),
+  setMemberRole: def('settings', [zId, z.enum(['owner', 'adult', 'viewer'])], async (c, id, role) => {
+    if (c.kind !== 'user' || c.role !== 'owner') throw new ApiError('forbidden', 'Only the household owner can do this.');
     if (id === c.userId) throw new ApiError('protected', 'You cannot change your own role.');
     if (role === 'owner') throw new ApiError('invalid', 'A household has one owner.');
     const n = await tenant(c, (t) => t.exec("update household_members set role = $2 where user_id = $1 and role <> 'owner'", [id, role]));
     if (!n) throw new ApiError('not_found', 'That person was not found.');
   }, { write: true }),
-  removeMember: def('owner', [zId], async (c, id) => {
+  removeMember: def('settings', [zId], async (c, id) => {
+    if (c.kind !== 'user' || c.role !== 'owner') throw new ApiError('forbidden', 'Only the household owner can do this.');
     if (id === c.userId) throw new ApiError('protected', 'You cannot remove yourself here.');
     const n = await tenant(c, (t) => t.exec("delete from household_members where user_id = $1 and role <> 'owner'", [id]));
     if (!n) throw new ApiError('not_found', 'That person was not found.');
@@ -201,18 +205,18 @@ export const core = {
   }),
 
   /* ---------------------------------------------------------------- screens (devices) and pairing */
-  listDevices: def('adult', [], async (c) => (await tenant(c, (t) => t.all<{ id: string; nickname: string; kind: 'display' | 'browser'; last_seen_at: string | null; created_at: string; config: Record<string, unknown> }>(
+  listDevices: def('settings', [], async (c) => (await tenant(c, (t) => t.all<{ id: string; nickname: string; kind: 'display' | 'browser'; last_seen_at: string | null; created_at: string; config: Record<string, unknown> }>(
     'select id, nickname, kind, last_seen_at, created_at, config from devices where revoked_at is null order by created_at'))).map((d) => ({ id: d.id, nickname: d.nickname, kind: d.kind, lastSeenAt: d.last_seen_at, createdAt: d.created_at, config: d.config as { theme?: 'auto' | 'light' | 'dark'; idleMinutes?: number } }))),
   getDevice: def('read', [zId], async (c, id) => {
     const d = await tenant(c, (t) => t.one<{ id: string; nickname: string; kind: 'display' | 'browser'; last_seen_at: string | null; created_at: string; config: Record<string, unknown> }>('select id, nickname, kind, last_seen_at, created_at, config from devices where id = $1 and revoked_at is null', [id]));
     return d ? { id: d.id, nickname: d.nickname, kind: d.kind, lastSeenAt: d.last_seen_at, createdAt: d.created_at, config: d.config as { theme?: 'auto' | 'light' | 'dark'; idleMinutes?: number } } : null;
   }),
-  updateDevice: def('adult', [zId, z.object({ nickname: zStr(60).optional(), config: z.object({ theme: z.enum(['auto', 'light', 'dark']).optional(), idleMinutes: z.number().int().min(0).max(240).optional() }).optional() })], async (c, id, p) => {
+  updateDevice: def('settings', [zId, z.object({ nickname: zStr(60).optional(), config: z.object({ theme: z.enum(['auto', 'light', 'dark']).optional(), idleMinutes: z.number().int().min(0).max(240).optional() }).optional() })], async (c, id, p) => {
     if (p.nickname !== undefined && !clean(p.nickname)) throw new ApiError('missing', 'Give this screen a name.');
     const n = await tenant(c, (t) => t.exec('update devices set nickname = coalesce($2, nickname), config = coalesce($3::jsonb, config) where id = $1 and revoked_at is null', [id, p.nickname === undefined ? null : clean(p.nickname), p.config ? JSON.stringify(p.config) : null]));
     if (!n) throw new ApiError('not_found', 'That screen was not found.');
   }, { write: true }),
-  removeDevice: def('adult', [zId], async (c, id) => { await tenant(c, (t) => t.exec('delete from devices where id = $1', [id])); }, { write: true }),
+  removeDevice: def('settings', [zId], async (c, id) => { await tenant(c, (t) => t.exec('delete from devices where id = $1', [id])); }, { write: true }),
   startPairing: def('public', [], async (c) => {
     limit(`pair:${c.ip}`, 30, 3600_000);
     const A = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // no 0, O, 1, I, L
@@ -236,7 +240,7 @@ export const core = {
     if (r.device_id) { c.jar.set(COOKIE.device, token, { maxAge: 3650 * 86400 }); c.jar.delete(COOKIE.pending); return 'paired' as const; }
     return new Date(r.expires_at) < new Date() ? ('expired' as const) : ('pending' as const);
   }),
-  claimPairing: def('adult', [zStr(20), zStr(60)], async (c, codeRaw, nickname) => {
+  claimPairing: def('settings', [zStr(20), zStr(60)], async (c, codeRaw, nickname) => {
     limit(`claim:${c.userId ?? c.ip}`, 10, 600_000);
     const code = codeRaw.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
     if (!clean(nickname)) throw new ApiError('missing', 'Give this screen a name, like Kitchen.');
@@ -254,21 +258,26 @@ export const core = {
 
   /* ---------------------------------------------------------------- parent PIN */
   hasPin: def('read', [], async (c) => !!(await tenant(c, (t) => t.one<{ x: number }>('select 1 as x from households where id = $1 and parent_pin_hash is not null', [c.hid])))),
-  setPin: def('adult', [z.string().regex(/^\d{4}$/, 'pin').nullable()], async (c, pin) => {
-    const h = pin === null ? null : await hashPassword(pin);
+  setPin: def('adult', [z.string().regex(/^\d{4}$/, 'pin')], async (c, pin) => {
+    // Choosing the very first PIN needs nothing; changing an existing one needs the current unlock.
+    if (c.pinSet && !c.pinFresh) throw new ApiError('locked', 'Enter the parent PIN to change it.');
+    if (c.kind === 'user' && c.role !== 'owner' && c.role !== 'adult') throw new ApiError('forbidden', 'Your role can look but not change things.');
+    const h = await hashPassword(pin);
     await tenant(c, (t) => t.exec('update households set parent_pin_hash = $2 where id = $1', [c.hid, h]));
+    c.jar.set(COOKIE.unlock, sign({ h: c.hid }, 300), { maxAge: 300 });
   }, { write: true }),
   verifyPin: def('read', [zStr(10)], async (c, pin) => {
     limit(`pin:${c.deviceId ?? c.userId}`, 10, 300_000);
     const r = await tenant(c, (t) => t.one<{ parent_pin_hash: string | null }>('select parent_pin_hash from households where id = $1', [c.hid]));
     if (!r?.parent_pin_hash) return true;
     const ok = await verifyPassword(pin, r.parent_pin_hash);
-    if (ok && c.kind === 'device') c.jar.set(COOKIE.unlock, sign({ h: c.hid }, 300), { maxAge: 300 });
+    if (ok) c.jar.set(COOKIE.unlock, sign({ h: c.hid }, 300), { maxAge: 300 });
     return ok;
   }),
 
   /* ---------------------------------------------------------------- account */
-  exportAll: def('owner', [], async (c) => tenant(c, async (t) => {
+  exportAll: def('settings', [], async (c) => tenant(c, async (t) => {
+    if (c.kind !== 'user' || c.role !== 'owner') throw new ApiError('forbidden', 'Only the household owner can do this.');
     const tables = ['households', 'profiles', 'event_categories', 'events', 'event_overrides', 'countdowns', 'tasks', 'task_completions', 'rewards', 'star_ledger', 'lists', 'list_items', 'recipes', 'meal_plan_entries', 'photo_albums'];
     const out: Record<string, unknown> = {};
     for (const n of tables) out[n] = await t.all(`select * from ${n}`);

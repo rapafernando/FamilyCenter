@@ -34,17 +34,17 @@ export const media = {
     const photos = await t.all<{ id: string; album_id: string; caption: string | null }>('select id, album_id, caption from photos where deleted_at is null and album_id is not null order by created_at');
     return albums.map((a) => ({ id: a.id, name: a.name, showOnDisplay: a.show_on_display, photos: photos.filter((p) => p.album_id === a.id).map((p) => ({ id: p.id, dataUrl: photoUrl(p.id), caption: p.caption ?? '' })) }));
   })),
-  createAlbum: def('adult', [zStr(60)], async (c, name) => {
+  createAlbum: def('settings', [zStr(60)], async (c, name) => {
     if (!clean(name)) throw new ApiError('missing', 'Give the album a name.');
     const r = await tenant(c, (t) => t.one<{ id: string }>('insert into photo_albums (household_id, name) values ($1,$2) returning id', [c.hid, clean(name)]));
     return { id: r!.id, name: clean(name), showOnDisplay: true };
   }, { write: true }),
-  updateAlbum: def('adult', [zId, z.object({ name: zStr(60).optional(), showOnDisplay: z.boolean().optional() })], async (c, id, p) => {
+  updateAlbum: def('settings', [zId, z.object({ name: zStr(60).optional(), showOnDisplay: z.boolean().optional() })], async (c, id, p) => {
     if (p.name !== undefined && !clean(p.name)) throw new ApiError('missing', 'Give the album a name.');
     const n = await tenant(c, (t) => t.exec('update photo_albums set name = coalesce($2,name), show_on_display = coalesce($3,show_on_display) where id = $1', [id, p.name === undefined ? null : clean(p.name), p.showOnDisplay ?? null]));
     if (!n) throw new ApiError('not_found', 'That album was not found.');
   }, { write: true }),
-  deleteAlbum: def('adult', [zId], async (c, id) => {
+  deleteAlbum: def('settings', [zId], async (c, id) => {
     const keys = await tenant(c, async (t) => {
       const k = await t.all<{ storage_key: string }>('select storage_key from photos where album_id = $1', [id]);
       await t.exec('delete from photos where album_id = $1', [id]);

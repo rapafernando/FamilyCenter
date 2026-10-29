@@ -32,7 +32,7 @@ const mk = async (tag: string) => {
     return { fam, person, list, ev, task, reward, item, recipe, meal, album, cat, cd };
   });
   const jar = { get: () => undefined, set: () => {}, delete: () => {} };
-  const ctx = (role: 'owner' | 'adult' | 'viewer' = 'owner') => ({ jar, ip: 'test', kind: 'user' as const, userId: u!.id, userName: tag, email: `${tag}@example.test`, platformAdmin: false, householdId: hid, role, unlocked: false });
+  const ctx = (role: 'owner' | 'adult' | 'viewer' = 'owner') => ({ jar, ip: 'test', kind: 'user' as const, userId: u!.id, userName: tag, email: `${tag}@example.test`, platformAdmin: false, householdId: hid, role, pinSet: true, pinFresh: true, unlocked: false });
   return { uid: u!.id, hid, ids, ctx };
 };
 
@@ -132,7 +132,7 @@ await test('an adult cannot do owner-only things', async () => {
   await assert.rejects(call(A.ctx('adult') as never, 'exportAll', []), (e: unknown) => e instanceof ApiError && e.code === 'forbidden');
 });
 await test('a signed-out caller is refused by every call except the public ones', async () => {
-  const anon = { jar: { get: () => undefined, set: () => {}, delete: () => {} }, ip: 'test-anon', kind: 'anon' as const, platformAdmin: false, unlocked: false };
+  const anon = { jar: { get: () => undefined, set: () => {}, delete: () => {} }, ip: 'test-anon', kind: 'anon' as const, platformAdmin: false, unlocked: false, pinSet: false, pinFresh: false };
   const open = new Set(['features', 'getSession', 'signUp', 'signIn', 'signOut', 'startPairing', 'pairingStatus', 'previewInvitation', 'startDemo', 'requestPasswordReset', 'resetPassword', 'verifyEmail']);
   for (const [name, d] of Object.entries(registry)) {
     if (d.level === 'public') { assert.ok(open.has(name), `${name} is public but not on the allowed list`); continue; }
@@ -141,10 +141,24 @@ await test('a signed-out caller is refused by every call except the public ones'
 });
 await test('a paired screen that has not entered the PIN cannot do adult things', async () => {
   await withTenant(A.hid, (t) => t.exec("update households set parent_pin_hash = 'x' where id = $1", [A.hid]));
-  const dev = { jar: { get: () => undefined, set: () => {}, delete: () => {} }, ip: 'test', kind: 'device' as const, householdId: A.hid, deviceId: crypto.randomUUID(), platformAdmin: false, unlocked: false };
+  const dev = { jar: { get: () => undefined, set: () => {}, delete: () => {} }, ip: 'test', kind: 'device' as const, householdId: A.hid, deviceId: crypto.randomUUID(), platformAdmin: false, unlocked: false, pinSet: false, pinFresh: false };
   await call(dev as never, 'listEvents', [{ from: '2029-12-01T00:00:00Z', to: '2030-02-01T00:00:00Z' }]);
   await assert.rejects(call(dev as never, 'createTasks', [{ profileIds: [A.ids.person], title: 'x', emoji: '', kind: 'chore', timeOfDay: null, dueTime: null, startsOn: '2030-01-01', endsOn: null, rrule: null, starValue: 1 }]), (e: unknown) => e instanceof ApiError && e.code === 'locked');
   await call({ ...dev, unlocked: true } as never, 'createTasks', [{ profileIds: [A.ids.person], title: 'x', emoji: '', kind: 'chore', timeOfDay: null, dueTime: null, startsOn: '2030-01-01', endsOn: null, rrule: null, starValue: 1 }]);
+});
+await test('Settings-level calls need the parent PIN: locked until entered, refused outright when none exists', async () => {
+  const a = A.ctx('owner') as never as Record<string, unknown>;
+  const dev = { jar: { get: () => undefined, set: () => {}, delete: () => {} }, ip: 'test', kind: 'device' as const, householdId: A.hid, deviceId: crypto.randomUUID(), platformAdmin: false, unlocked: false, pinSet: true, pinFresh: false };
+  const code = async (c: unknown, m: string, args: unknown[] = []) => { try { await call(c as never, m, args); return 'ok'; } catch (e) { return (e as ApiError).code; } };
+  for (const [m, args] of [['listDevices', []], ['listAiProviders', []], ['reloadConnection', [crypto.randomUUID()]]] as [string, unknown[]][]) {
+    assert.equal(await code({ ...a, pinFresh: false }, m, args), 'locked', m + ' without the PIN');
+    assert.equal(await code({ ...a, pinSet: false, pinFresh: false }, m, args), 'pin_required', m + ' with no PIN set');
+  }
+  assert.equal(await code({ ...a, role: 'viewer' }, 'listDevices'), 'forbidden');
+  assert.equal(await code({ ...a, role: 'adult' }, 'exportAll'), 'forbidden', 'export stays owner only');
+  assert.equal(await code({ ...a, role: 'adult' }, 'removeMember', [crypto.randomUUID()]), 'forbidden', 'removing people stays owner only');
+  assert.equal(await code({ ...dev, unlocked: true, pinSet: true, pinFresh: false }, 'listDevices'), 'locked', 'an everyday-unlocked screen is still locked out of Settings');
+  assert.equal(await code({ ...dev, unlocked: true, pinSet: true, pinFresh: true }, 'listDevices'), 'ok');
 });
 
 console.log('Stars cannot go below zero, and spent stars cannot be taken back');

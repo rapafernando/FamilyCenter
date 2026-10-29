@@ -21,8 +21,10 @@ async function rpc(method: string, args: unknown[]): Promise<unknown> {
     // Re-read the session once so the screen can send the person to the welcome page. Bumping on every refused call made
     // every screen re-ask, get refused, and bump again: thousands of requests a second (BUG-001).
     if (j.error!.code === 'unauthenticated' && Date.now() - lastUnauthBump > 10_000) { lastUnauthBump = Date.now(); bump(); }
+    if (j.error!.code === 'locked' && typeof window !== 'undefined') window.dispatchEvent(new Event('fc:locked')); // the server forgot the PIN: ask for it again
     throw new ApiError(j.error!.code, j.error!.message);
   }
+  if (/^signOut/.test(method) && typeof window !== 'undefined') { try { sessionStorage.removeItem('fc_unlocked_until'); } catch { /* ignore */ } }
   if (!READ.test(method) || (method === 'pairingStatus' && j.r === 'paired')) bump();
   return j.r;
 }

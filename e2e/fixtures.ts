@@ -5,6 +5,7 @@ import { execFileSync } from 'node:child_process';
 let n = 0;
 const uid = () => `${Date.now().toString(36)}${(n++).toString(36)}${Math.random().toString(36).slice(2, 5)}`;
 export const PASSWORD = 'correct-horse-9';
+export const PIN = '2468';
 
 /** Every test is a different visitor to the rate limiter, and fails on console errors or server (5xx) errors. */
 export const test = base.extend<{ problems: string[]; allowProblems: () => void }>({
@@ -25,13 +26,14 @@ export const checkProblems = (problems: string[]) => expect(problems, 'console /
 export function email(tag = 'u') { return `${tag}-${uid()}@example.test`; }
 
 /** Creates a new household through the sign-up screen and lands in the app. */
-export async function signUp(page: Page, o: { name?: string; email?: string; household?: string; tz?: string } = {}) {
+export async function signUp(page: Page, o: { name?: string; email?: string; household?: string; tz?: string; pin?: string } = {}) {
   const em = o.email ?? email('owner');
   await page.goto('/signup');
   await page.getByLabel('Your name').fill(o.name ?? 'Test Owner');
   await page.getByLabel('Email').fill(em);
   await page.getByLabel('Password').fill(PASSWORD);
   await page.getByLabel('Household name').fill(o.household ?? 'Test House');
+  await page.getByLabel(/Parent PIN/).fill(o.pin ?? PIN);
   if (o.tz) await page.getByLabel('Time zone').selectOption(o.tz);
   await page.getByRole('button', { name: 'Create household' }).click();
   await page.waitForURL(/\/settings\/profiles/);
@@ -73,6 +75,12 @@ export async function linkScreen(page: Page, code: string, name: string) {
   await page.getByLabel('Code on the screen').fill(code);
   await page.getByLabel('Name for this screen').fill(name);
   await page.getByRole('button', { name: 'Link screen' }).click();
+}
+
+/** Enters the parent PIN the way the PIN pad does: the server remembers it for five minutes in this browser. */
+export async function unlockSettings(page: Page, pin = PIN) {
+  const j = await rpc(page, 'verifyPin', [pin]);
+  if (!j.ok || j.r !== true) throw new Error('PIN refused');
 }
 
 /** The owner invites someone by link; that person joins in a separate browser. Returns their page. */

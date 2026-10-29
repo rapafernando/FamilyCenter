@@ -110,8 +110,8 @@ export const ai = {
     const p = await tenant(c, (t) => t.one<{ label: string }>('select label from ai_providers where is_default and enabled'));
     return { available: !!p, providerLabel: p?.label ?? null };
   }),
-  listAiProviders: def('adult', [], async (c) => (await tenant(c, (t) => t.all<PRow>(`select ${PCOLS} from ai_providers order by created_at`))).map(mapP)),
-  saveAiProvider: def('adult', [z.object({ provider: z.enum(['openai', 'anthropic', 'google', 'openai_compatible']), label: zStr(60), model: zStr(100), baseUrl: zStr(300), apiKey: zStr(500) })], async (c, i) => {
+  listAiProviders: def('settings', [], async (c) => (await tenant(c, (t) => t.all<PRow>(`select ${PCOLS} from ai_providers order by created_at`))).map(mapP)),
+  saveAiProvider: def('settings', [z.object({ provider: z.enum(['openai', 'anthropic', 'google', 'openai_compatible']), label: zStr(60), model: zStr(100), baseUrl: zStr(300), apiKey: zStr(500) })], async (c, i) => {
     limit(`aikey:${c.hid}`, 20, 3600_000);
     const key = i.apiKey.trim();
     if (i.provider !== 'openai_compatible' && !key) throw new ApiError('missing', 'Paste the API key from your provider.');
@@ -125,17 +125,17 @@ export const ai = {
     });
     return mapP(r!);
   }, { write: true }),
-  setDefaultAiProvider: def('adult', [zId], async (c, id) => tenant(c, async (t) => {
+  setDefaultAiProvider: def('settings', [zId], async (c, id) => tenant(c, async (t) => {
     if (!(await t.one('select 1 from ai_providers where id = $1', [id]))) throw new ApiError('not_found', 'That key was not found.');
     await t.exec('update ai_providers set is_default = false where is_default');
     await t.exec('update ai_providers set is_default = true where id = $1', [id]);
   }), { write: true }),
-  removeAiProvider: def('adult', [zId], async (c, id) => tenant(c, async (t) => {
+  removeAiProvider: def('settings', [zId], async (c, id) => tenant(c, async (t) => {
     const was = await t.one<{ is_default: boolean }>('select is_default from ai_providers where id = $1', [id]);
     await t.exec('delete from ai_providers where id = $1', [id]);
     if (was?.is_default) await t.exec('update ai_providers set is_default = true where id = (select id from ai_providers order by created_at limit 1)');
   }), { write: true }),
-  verifyAiProvider: def('adult', [zId], async (c, id) => {
+  verifyAiProvider: def('settings', [zId], async (c, id) => {
     limit(`aiverify:${c.hid}`, 10, 600_000);
     const p = await tenant(c, (t) => t.one<Secret>('select provider, model, base_url, api_key_encrypted, key_id from ai_providers where id = $1', [id]));
     if (!p) throw new ApiError('not_found', 'That key was not found.');

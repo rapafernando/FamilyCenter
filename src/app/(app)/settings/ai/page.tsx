@@ -5,7 +5,7 @@ import { data, IS_FAKE } from '@/lib/data';
 import { useQuery } from '@/lib/data/hooks';
 import type { AiProviderName } from '@/lib/types';
 import { PageHeader } from '@/components/shell/AppShell';
-import { AdultGate } from '@/components/shell/AdultGate';
+import { SettingsGate } from '@/components/shell/AdultGate';
 import { Button, Field, Select } from '@/components/ui/controls';
 import { Banner } from '@/components/ui/misc';
 import { ChoiceDialog } from '@/components/ui/dialogs';
@@ -20,7 +20,7 @@ export default function AiSettings() {
   const [check, setCheck] = useState<Record<string, { ok: boolean; message: string }>>({});
   const guard = async (fn: () => Promise<unknown>, ok?: string) => { setErr(''); try { await fn(); if (ok) notify({ tone: 'success', title: ok }); q.reload(); } catch (e) { setErr(errMsg(e)); } };
   return (
-    <AdultGate>
+    <SettingsGate>
       <PageHeader title="AI helper" back={{ href: '/settings', label: 'Settings' }} />
       <div className="flex max-w-[40rem] flex-col gap-5">
         <p className="text-base text-muted">AI features are off until you add your own key. You pay your provider directly for what you use. Without a key, the Assistant page and AI buttons are hidden.</p>
@@ -52,6 +52,6 @@ export default function AiSettings() {
         </form>
       </div>
       <ChoiceDialog open={!!gone} danger title="Remove this key?" detail="AI features turn off if it is your only key." choices={[{ value: 'go', label: 'Remove key' }]} onChoose={() => { const id = gone!; setGone(null); guard(() => data.removeAiProvider(id), 'Key removed'); }} onCancel={() => setGone(null)} />
-    </AdultGate>
+    </SettingsGate>
   );
 }

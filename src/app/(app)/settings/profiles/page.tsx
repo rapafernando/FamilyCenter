@@ -8,7 +8,7 @@ import { useQuery } from '@/lib/data/hooks';
 import { MARKER_PRESETS } from '@/lib/markers.generated';
 import type { Profile } from '@/lib/types';
 import { PageHeader } from '@/components/shell/AppShell';
-import { AdultGate } from '@/components/shell/AdultGate';
+import { SettingsGate } from '@/components/shell/AdultGate';
 import { Banner } from '@/components/ui/misc';
 import { Button, ColorPicker, Field, ProfileChip, Select } from '@/components/ui/controls';
 import { ChoiceDialog } from '@/components/ui/dialogs';
@@ -44,7 +44,7 @@ function Inner() {
   const [edit, setEdit] = useState<string | 'new' | null>(sp.get('welcome') ? 'new' : null);
   const list = profiles.filter((p) => p.kind !== 'other');
   return (
-    <AdultGate>
+    <SettingsGate>
       <PageHeader title="People" back={{ href: '/settings', label: 'More' }} actions={<Button onClick={() => setEdit('new')}>Add person</Button>} />
       {sp.get('welcome') && <div className="mb-3"><Banner tone="success" title="Your household is ready">Add the people who live here. Each one gets a colour that shows up on every screen.</Banner></div>}
       {!cals.data && cals.loading ? <SkeletonList rows={3} /> : (
@@ -65,7 +65,7 @@ function Inner() {
         </ul>
       )}
       <p className="mt-4 max-w-[44rem] text-base text-muted">Link a Google calendar to a person in <Link href="/settings/calendars" className="font-bold text-accent underline">Calendars</Link> and its events show in their colour.</p>
-    </AdultGate>
+    </SettingsGate>
   );
 }
 export default function ProfilesPage() { return <Suspense fallback={null}><Inner /></Suspense>; }

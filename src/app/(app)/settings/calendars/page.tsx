@@ -8,7 +8,7 @@ import { useQuery } from '@/lib/data/hooks';
 import type { Connection } from '@/lib/types';
 import { markerAttrs } from '@/lib/marker';
 import { PageHeader } from '@/components/shell/AppShell';
-import { AdultGate } from '@/components/shell/AdultGate';
+import { SettingsGate } from '@/components/shell/AdultGate';
 import { Button, Segmented, Select, Switch } from '@/components/ui/controls';
 import { Banner, ConnectionCard } from '@/components/ui/misc';
 import { ChoiceDialog } from '@/components/ui/dialogs';
@@ -44,7 +44,7 @@ export default function Calendars() {
   const people = profiles.filter((p) => p.kind !== 'other');
 
   return (
-    <AdultGate>
+    <SettingsGate>
       <PageHeader title="Calendars" back={{ href: '/settings', label: 'Settings' }} />
       {IS_FAKE && <div className="mb-3"><Banner tone="info" title="Practice mode">The Google sign-in is pretended here. Real sign-in is added with the server.</Banner></div>}
       {err && <div className="mb-3"><Banner tone="danger" title="That did not work">{err}</Banner></div>}
@@ -111,6 +111,6 @@ export default function Calendars() {
       </div>
       <ChoiceDialog open={!!removing} danger title="Remove this Google account?" detail="Its events disappear from this screen. Nothing is deleted in Google." choices={[{ value: 'go', label: 'Remove account' }]}
         onChoose={() => { const c = removing!; setRemoving(null); guard(() => data.removeConnection(c.id), 'Google account removed'); }} onCancel={() => setRemoving(null)} />
-    </AdultGate>
+    </SettingsGate>
   );
 }

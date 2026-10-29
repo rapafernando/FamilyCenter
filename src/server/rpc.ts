@@ -11,6 +11,8 @@ export type Ctx = {
   jar: Jar; ip: string; kind: 'user' | 'device' | 'anon';
   userId?: string; userName?: string; email?: string; platformAdmin: boolean;
   householdId?: string; role?: Role; deviceId?: string; deviceName?: string; unlocked: boolean;
+  /** A parent PIN exists for this household / was entered in this browser in the last five minutes. */
+  pinSet: boolean; pinFresh: boolean;
 };
 export const COOKIE = { session: 'fc_session', device: 'fc_device', pending: 'fc_pairing', unlock: 'fc_unlock' } as const;
 const DAY = 86400;
@@ -19,8 +21,15 @@ export function startSession(jar: Jar, userId: string, householdId: string | nul
   jar.set(COOKIE.session, sign({ u: userId, h: householdId, sv: version }, 30 * DAY), { maxAge: 30 * DAY });
 }
 
+/** Whether the household has a parent PIN, and whether this browser entered it within the last five minutes (signed cookie). */
+async function pinState(hid: string, jar: Jar) {
+  const row = await withTenant(hid, (t) => t.one<{ x: number }>('select 1 as x from households where id = $1 and parent_pin_hash is not null', [hid]));
+  const un = verify<{ h: string }>(jar.get(COOKIE.unlock));
+  return { pinSet: !!row, pinFresh: !!un && un.h === hid };
+}
+
 export async function resolveCtx(jar: Jar, ip: string): Promise<Ctx> {
-  const base: Ctx = { jar, ip, kind: 'anon', platformAdmin: false, unlocked: false };
+  const base: Ctx = { jar, ip, kind: 'anon', platformAdmin: false, unlocked: false, pinSet: false, pinFresh: false };
   const s = verify<{ u: string; h: string | null; sv: number }>(jar.get(COOKIE.session));
   if (s) {
     const u = await plain((t) => t.one<{ id: string; name: string | null; email: string; session_version: number; is_platform_admin: boolean }>(
@@ -28,30 +37,38 @@ export async function resolveCtx(jar: Jar, ip: string): Promise<Ctx> {
     if (u && u.session_version === s.sv) {
       const ms = await plain((t) => t.all<{ household_id: string; role: Role }>('select * from user_memberships($1)', [u.id]));
       const m = ms.find((x) => x.household_id === s.h) ?? ms[0];
-      return { ...base, kind: 'user', userId: u.id, userName: u.name ?? u.email, email: u.email, platformAdmin: u.is_platform_admin, householdId: m?.household_id, role: m?.role };
+      const pin = m ? await pinState(m.household_id, jar) : { pinSet: false, pinFresh: false };
+      return { ...base, ...pin, kind: 'user', userId: u.id, userName: u.name ?? u.email, email: u.email, platformAdmin: u.is_platform_admin, householdId: m?.household_id, role: m?.role };
     }
   }
   const dev = jar.get(COOKIE.device);
   if (dev) {
     const d = await plain((t) => t.one<{ id: string; household_id: string; nickname: string }>('select * from auth_device($1)', [sha256(dev)]));
     if (d) {
-      const un = verify<{ h: string }>(jar.get(COOKIE.unlock));
-      // With no parent PIN set, the screen is open to everyone, as the screens say.
-      const noPin = !!(await withTenant(d.household_id, (t) => t.one('select 1 from households where id = $1 and parent_pin_hash is null', [d.household_id])));
-      return { ...base, kind: 'device', householdId: d.household_id, deviceId: d.id, deviceName: d.nickname, unlocked: noPin || (!!un && un.h === d.household_id) };
+      const pin = await pinState(d.household_id, jar);
+      // Everyday adult actions on a screen stay open when no PIN has been chosen yet (older households); Settings never are.
+      return { ...base, ...pin, kind: 'device', householdId: d.household_id, deviceId: d.id, deviceName: d.nickname, unlocked: !pin.pinSet || pin.pinFresh };
     }
   }
   return base;
 }
 
 /* ------------------------------------------------------------------ what each call needs */
-export type Level = 'public' | 'user' | 'read' | 'member' | 'adult' | 'owner';
+/** `settings` = what the Settings screens do: an adult or owner (or a paired screen) who has also entered the parent PIN. `admin` = settings, plus the person who runs this server. */
+export type Level = 'public' | 'user' | 'read' | 'member' | 'adult' | 'owner' | 'settings' | 'admin';
 function allowed(c: Ctx, level: Level) {
   if (level === 'public') return;
   if (c.kind === 'anon') throw new ApiError('unauthenticated', 'Sign in to continue.');
   if (level === 'user') { if (c.kind !== 'user') throw new ApiError('forbidden', 'Sign in with your account to do this.'); return; }
   if (!c.householdId) throw new ApiError('no_household', 'Create or join a household first.');
   if (level === 'read') return;
+  if (level === 'settings' || level === 'admin') {
+    if (c.kind === 'user' && c.role !== 'owner' && c.role !== 'adult') throw new ApiError('forbidden', 'Your role can look but not change things.');
+    if (level === 'admin' && !(c.kind === 'user' && c.platformAdmin)) throw new ApiError('forbidden', 'Only the person who runs this server can do this.');
+    if (!c.pinSet) throw new ApiError('pin_required', 'Choose a parent PIN first. Settings need it.');
+    if (!c.pinFresh) throw new ApiError('locked', 'Enter the parent PIN to do this.');
+    return;
+  }
   if (c.kind === 'device') {
     if (level === 'member') return;
     if (level === 'adult' && c.unlocked) return;
@@ -106,6 +123,6 @@ export async function call(c: Ctx, method: string, args: unknown): Promise<unkno
 }
 
 export const statusFor = (code: string) =>
-  ({ unauthenticated: 401, forbidden: 403, locked: 403, not_found: 404, rate_limited: 429, server_error: 500, stars_spent: 409, not_enough_stars: 409, duplicate: 409, name_taken: 409, email_taken: 409, in_use: 409 } as Record<string, number>)[code] ?? 400;
+  ({ unauthenticated: 401, forbidden: 403, locked: 403, pin_required: 403, not_found: 404, rate_limited: 429, server_error: 500, stars_spent: 409, not_enough_stars: 409, duplicate: 409, name_taken: 409, email_taken: 409, in_use: 409 } as Record<string, number>)[code] ?? 400;
 
 export const unused = env; // keeps tree-shaking from dropping env during build analysis

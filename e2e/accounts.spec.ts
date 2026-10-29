@@ -33,6 +33,7 @@ test.describe('F01 sign up and pairing', () => {
     await page.getByLabel('Email').fill(em);
     await page.getByLabel('Password').fill(PASSWORD);
     await page.getByLabel('Household name').fill('Double House');
+    await page.getByLabel(/Parent PIN/).fill('2468');
     const b = page.getByRole('button', { name: 'Create household' });
     await b.dblclick().catch(() => {});
     await page.waitForURL(/settings\/profiles/);
@@ -48,6 +49,7 @@ test.describe('F01 sign up and pairing', () => {
     await page.getByLabel('Email').fill(em);
     await page.getByLabel('Password').fill(PASSWORD);
     await page.getByLabel('Household name').fill('Second');
+    await page.getByLabel(/Parent PIN/).fill('2468');
     await page.getByRole('button', { name: 'Create household' }).click();
     await expect(page.getByText(/already/i).first()).toBeVisible();
     expect(sql(`select count(*) from users where email='${em}'`)).toBe('1');
@@ -60,6 +62,7 @@ test.describe('F01 sign up and pairing', () => {
     await page.getByLabel('Email').fill(em);
     await page.getByLabel('Password').fill('abc');
     await page.getByLabel('Household name').fill('S');
+    await page.getByLabel(/Parent PIN/).fill('2468');
     await page.getByRole('button', { name: 'Create household' }).click();
     await expect(page).toHaveURL(/signup/);
     expect(sql(`select count(*) from users where email='${em}'`)).toBe('0');
@@ -109,7 +112,7 @@ test.describe('F01 sign up and pairing', () => {
 });
 
 test('F01-E8 a made-up time zone is never stored', async ({ page }) => {
-  const bad = await rpc(page, 'signUp', [{ name: 'Zed', email: email('zed'), password: 'long-enough-1', householdName: 'Zone House', timezone: 'Mars/Olympus' }]);
+  const bad = await rpc(page, 'signUp', [{ name: 'Zed', email: email('zed'), password: 'long-enough-1', householdName: 'Zone House', timezone: 'Mars/Olympus', pin: '2468' }]);
   expect(bad.ok).toBe(true);
   expect(sql(`select timezone from households where name='Zone House' order by created_at desc limit 1`)).toBe('UTC');
   const hh = await must<any>(page, 'getHousehold');
@@ -322,7 +325,9 @@ test.describe('F14 invitations and roles', () => {
     await a.waitForURL(/calendar|settings|chores/);
     const post = async (m: string, args: unknown[]) => (await (await a.request.post('/api/rpc', { headers: { 'content-type': 'application/json' }, data: { m, a: args } })).json());
     expect((await post('createList', [{ name: 'Groceries 2', color: '#2a6f4f', emoji: '🛒' }])).ok).toBe(true);
-    // adults may invite (architecture: invitations are adult level) but may not remove people
+    // adults may invite once they have entered the parent PIN, but may not remove people
+    expect((await post('invite', ['x@example.test', 'adult'])).error?.code).toBe('locked');
+    expect((await post('verifyPin', ['2468'])).r).toBe(true);
     expect((await post('invite', ['x@example.test', 'adult'])).ok).toBe(true);
     const owner = sql(`select m.user_id from household_members m join households h on h.id=m.household_id where h.name='${hn}' and m.role='owner'`);
     expect((await post('removeMember', [owner])).ok).toBe(false);
@@ -361,6 +366,7 @@ test.describe('F01-E4 / X-6 interrupted and slow', () => {
     await page.getByLabel('Your name').fill('Half Way');
     await page.getByLabel('Email').fill(email('half'));
     await page.getByLabel('Household name').fill(hn);
+    await page.getByLabel(/Parent PIN/).fill('2468');
     await page.reload();
     await expect(page.getByLabel('Household name')).toHaveValue('');
     expect(sql(`select count(*) from households where name='${hn}'`)).toBe('0');
@@ -374,6 +380,7 @@ test.describe('F01-E4 / X-6 interrupted and slow', () => {
     await page.getByLabel('Email').fill(email('slow'));
     await page.getByLabel('Password').fill(PASSWORD);
     await page.getByLabel('Household name').fill(hn);
+    await page.getByLabel(/Parent PIN/).fill('2468');
     const b = page.getByRole('button', { name: /Create household|Creating|Working/i });
     await b.click();
     await expect(page.getByRole('button', { name: /Create household/ })).toBeDisabled({ timeout: 2000 });

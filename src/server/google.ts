@@ -357,8 +357,8 @@ export const connections = {
   listSyncedCalendars: def('read', [], async (c): Promise<SyncedCalendar[]> => (await tenant(c, (t) => t.all<{ id: string; connection_id: string; external_id: string; name: string; color: string | null; enabled: boolean; profile_id: string | null; is_default_target: boolean }>(
     'select id, connection_id, external_id, name, color, enabled, profile_id, is_default_target from synced_calendars order by created_at, name')))
     .map((r) => ({ id: r.id, connectionId: r.connection_id, externalId: r.external_id, name: r.name, color: (r.color ?? COLOR_FALLBACK).toUpperCase(), enabled: r.enabled, profileId: r.profile_id, isDefaultTarget: r.is_default_target }))),
-  startGoogleConnect: def('adult', [z.enum(['one_way', 'two_way']), zId.optional()], async (c, mode, reconnectId) => startGoogleConnect(c, mode, reconnectId)),
-  updateConnection: def('adult', [zId, z.object({ mode: z.enum(['one_way', 'two_way']).optional(), status: z.enum(['ok', 'paused']).optional() })], async (c, id, p) => {
+  startGoogleConnect: def('settings', [z.enum(['one_way', 'two_way']), zId.optional()], async (c, mode, reconnectId) => startGoogleConnect(c, mode, reconnectId)),
+  updateConnection: def('settings', [zId, z.object({ mode: z.enum(['one_way', 'two_way']).optional(), status: z.enum(['ok', 'paused']).optional() })], async (c, id, p) => {
     const cur = await getConn(c, id);
     await tenant(c, async (t) => {
       if (p.mode && p.mode !== cur.mode) {
@@ -371,7 +371,7 @@ export const connections = {
       if (p.status && cur.status !== 'needs_reauth') await t.exec("update calendar_connections set status = $2, next_sync_at = null where id = $1", [id, p.status]);
     });
   }, { write: true }),
-  updateSyncedCalendar: def('adult', [zId, z.object({ enabled: z.boolean().optional(), profileId: zId.nullable().optional(), isDefaultTarget: z.boolean().optional() })], async (c, id, p) => {
+  updateSyncedCalendar: def('settings', [zId, z.object({ enabled: z.boolean().optional(), profileId: zId.nullable().optional(), isDefaultTarget: z.boolean().optional() })], async (c, id, p) => {
     await tenant(c, async (t) => {
       const cal = await t.one<{ connection_id: string; mode: string; enabled: boolean }>('select s.connection_id, cc.mode, s.enabled from synced_calendars s join calendar_connections cc on cc.id = s.connection_id where s.id = $1', [id]);
       if (!cal) throw new ApiError('not_found', 'That calendar was not found.');
@@ -390,7 +390,7 @@ export const connections = {
     });
     if (p.enabled === true) void tenant(c, (t) => t.one<{ connection_id: string }>('select connection_id from synced_calendars where id = $1', [id])).then((r) => r && syncConnection(c.hid, r.connection_id)).catch(() => {});
   }, { write: true }),
-  reloadConnection: def('adult', [zId], async (c, id) => {
+  reloadConnection: def('settings', [zId], async (c, id) => {
     const cur = await getConn(c, id);
     if (cur.status === 'needs_reauth') throw new ApiError('needs_reauth', 'Google needs you to sign in again before this can sync.');
     await tenant(c, (t) => t.exec('update calendar_connections set next_sync_at = null where id = $1', [id]));
@@ -398,12 +398,12 @@ export const connections = {
     const after = await getConn(c, id);
     if (after.status === 'needs_reauth') throw new ApiError('needs_reauth', 'Google needs you to sign in again before this can sync.');
   }, { write: true }),
-  checkToken: def('adult', [zId], async (c, id): Promise<Connection> => {
+  checkToken: def('settings', [zId], async (c, id): Promise<Connection> => {
     await getConn(c, id);
     await checkConnectionToken(c.hid, id);
     return mapConn(await getConn(c, id));
   }, { write: true }),
-  removeConnection: def('adult', [zId], async (c, id) => {
+  removeConnection: def('settings', [zId], async (c, id) => {
     const row = await tenant(c, (t) => t.one<SecretRow>('select secret_encrypted, secret_key_id from calendar_connections where id = $1', [id]));
     if (!row) return;
     if (row.secret_encrypted && row.secret_key_id !== null && googleConfigured()) { // tell Google to forget us; failure here must not block removal

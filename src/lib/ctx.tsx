@@ -37,7 +37,7 @@ export function NoticeProvider({ children }: { children: React.ReactNode }) {
 
 /* ---------- app context: session, household, people, today ---------- */
 export type Surface = 'wall' | 'handheld';
-type App = { session: Session; household: Household; profiles: Profile[]; today: string; surface: Surface; setSurface: (s: Surface | null) => void; isAdult: boolean; unlocked: boolean; unlock: () => void };
+type App = { session: Session; household: Household; profiles: Profile[]; today: string; surface: Surface; setSurface: (s: Surface | null) => void; isAdult: boolean; unlocked: boolean; /** The parent PIN was entered here in the last five minutes: Settings may open. */ settingsOpen: boolean; unlock: () => void };
 const AppCtx = createContext<App | null>(null);
 export const useApp = () => { const v = useContext(AppCtx); if (!v) throw new Error('useApp needs <Gate>'); return v; };
 export const useColor = () => { const { profiles } = useApp(); return (id: string | null | undefined) => profiles.find((p) => p.id === id)?.color ?? null; };
@@ -48,6 +48,12 @@ export function Gate({ children }: { children: React.ReactNode }) {
   const hh = useQuery(() => data.getHousehold(), []);
   const pr = useQuery(() => data.listProfiles(), []);
   const [unlockedUntil, setUnlockedUntil] = useState(0);
+  // The server remembers the PIN for five minutes in a cookie; this mirrors that so a reload does not ask again. Never holds the PIN itself.
+  useEffect(() => {
+    try { const v = Number(sessionStorage.getItem('fc_unlocked_until')); if (v > Date.now()) setUnlockedUntil(v); } catch { /* storage may be off */ }
+    const lock = () => { setUnlockedUntil(0); try { sessionStorage.removeItem('fc_unlocked_until'); } catch { /* ignore */ } };
+    window.addEventListener('fc:locked', lock); return () => window.removeEventListener('fc:locked', lock);
+  }, []);
   const [, force] = useState(0);
   const s = sess.data;
   const signedIn = !!(s && (s.user || s.deviceId));
@@ -60,8 +66,9 @@ export function Gate({ children }: { children: React.ReactNode }) {
     if (!s || !hh.data || !pr.data || (!s.user && !s.deviceId)) return null;
     const isAdult = s.user ? s.role !== 'viewer' : true;
     const unlocked = s.user ? s.role === 'owner' || s.role === 'adult' : Date.now() < unlockedUntil;
-    return { session: s, household: hh.data, profiles: pr.data, today: todayIn(hh.data.timezone), surface, isAdult, unlocked,
-      setSurface: (v) => { setSurfacePref(v); force((n) => n + 1); }, unlock: () => setUnlockedUntil(Date.now() + 5 * 60000) };
+    const settingsOpen = Date.now() < unlockedUntil;
+    return { session: s, household: hh.data, profiles: pr.data, today: todayIn(hh.data.timezone), surface, isAdult, unlocked, settingsOpen,
+      setSurface: (v) => { setSurfacePref(v); force((n) => n + 1); }, unlock: () => { const until = Date.now() + 5 * 60000; setUnlockedUntil(until); try { sessionStorage.setItem('fc_unlocked_until', String(until)); } catch { /* ignore */ } } };
   }, [s, hh.data, pr.data, surface, unlockedUntil]);
   if (sess.error || (signedIn && (hh.error || pr.error))) return <div className="p-6"><Banner tone="danger" title="This screen could not load">Reload the page. If it keeps happening, check that the app is running.</Banner></div>;
   if (!value) return <div className="p-6 text-muted" role="status">Loading…</div>;

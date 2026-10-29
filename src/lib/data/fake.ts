@@ -46,8 +46,9 @@ export const data = {
     return { user: null, deviceId: null, role: null };
   },
   async startDemo() { await wait(); resetDemo(); const s = getState(); const owner = s.members.find((m) => m.isYou)!; s.user = { id: owner.id, name: owner.name, email: owner.email, password: 'demo' }; commit(() => 0); setSessionUserId(owner.id); },
-  async signUp(i: { name: string; email: string; password: string; householdName?: string; timezone: string; inviteToken?: string }) {
+  async signUp(i: { name: string; email: string; password: string; householdName?: string; timezone: string; inviteToken?: string; pin?: string }) {
     await wait();
+    if (!i.inviteToken && !/^\d{4}$/.test(i.pin ?? '')) throw new ApiError('invalid_pin', 'Choose a parent PIN of exactly 4 digits. Settings ask for it.');
     if (!/^\S+@\S+\.\S+$/.test(i.email)) throw new ApiError('invalid_email', 'Enter an email address like name@example.com.');
     if (i.password.length < 8) throw new ApiError('weak_password', 'Use at least 8 characters for the password.');
     if (!clean(i.name) || !clean(i.householdName ?? '')) throw new ApiError('missing', 'Fill in your name and a name for the household.');
@@ -385,7 +386,7 @@ export const data = {
 
   /* ------------------------------------------------------------ PIN, account */
   async hasPin() { await wait(); return !!getState().pin; },
-  async setPin(pin: string | null) { await wait(); if (pin !== null && !/^\d{4}$/.test(pin)) throw new ApiError('invalid', 'Use exactly 4 digits.'); commit((s) => { s.pin = pin; }); },
+  async setPin(pin: string) { await wait(); if (!/^\d{4}$/.test(pin)) throw new ApiError('invalid', 'Use exactly 4 digits.'); commit((s) => { s.pin = pin; }); },
   async verifyPin(pin: string): Promise<boolean> { await wait(); const p = getState().pin; return !p || p === pin; },
   async exportAll(): Promise<string> { await wait(); const { user, ...rest } = getState(); void user; return JSON.stringify(rest, null, 2); },
   async deleteAccount() { await wait(); resetDemo(); setSessionUserId(null); setSessionDeviceId(null); },

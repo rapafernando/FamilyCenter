@@ -8,7 +8,7 @@ import { data } from '@/lib/data';
 import { useQuery } from '@/lib/data/hooks';
 import type { Device } from '@/lib/types';
 import { PageHeader } from '@/components/shell/AppShell';
-import { AdultGate } from '@/components/shell/AdultGate';
+import { SettingsGate } from '@/components/shell/AdultGate';
 import { Button, Field, Select } from '@/components/ui/controls';
 import { Banner } from '@/components/ui/misc';
 import { ChoiceDialog } from '@/components/ui/dialogs';
@@ -41,7 +41,7 @@ export default function Devices() {
   const q = useQuery(() => data.listDevices(), []);
   const [gone, setGone] = useState<Device | null>(null);
   return (
-    <AdultGate>
+    <SettingsGate>
       <PageHeader title="Screens" back={{ href: '/settings', label: 'Settings' }} actions={<Link href="/settings/devices/link" className="inline-flex min-h-target items-center rounded-md bg-accent px-5 font-bold text-accent-on">Link a screen</Link>} />
       {q.loading && !q.data && <SkeletonList rows={2} />}
       {q.error && <Banner tone="danger" title="Could not load your screens" action={<Button size="sm" onClick={q.reload}>Try again</Button>}>Try again in a moment.</Banner>}
@@ -52,6 +52,6 @@ export default function Devices() {
       <ul className="m-0 flex max-w-[40rem] list-none flex-col gap-3 p-0">{(q.data ?? []).map((d) => <DeviceRow key={d.id} d={d} onChange={q.reload} onRemove={() => setGone(d)} />)}</ul>
       <ChoiceDialog open={!!gone} danger title={`Unlink ${gone?.nickname}?`} detail="That screen goes back to the welcome page. Your calendar is not changed." choices={[{ value: 'go', label: 'Unlink screen' }]}
         onChoose={async () => { const d = gone!; setGone(null); await data.removeDevice(d.id); q.reload(); }} onCancel={() => setGone(null)} />
-    </AdultGate>
+    </SettingsGate>
   );
 }
