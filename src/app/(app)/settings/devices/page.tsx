@@ -13,6 +13,7 @@ import { Button, Field, Select } from '@/components/ui/controls';
 import { Banner } from '@/components/ui/misc';
 import { ChoiceDialog } from '@/components/ui/dialogs';
 import { SkeletonList } from '@/components/ui/skeleton';
+import { SIZE_OPTIONS, ZOOM_OPTIONS, type ScreenSize } from '@/lib/screenSize';
 
 const seen = (iso: string | null) => (iso ? DateTime.fromISO(iso).toRelative({ style: 'long' }) : 'never');
 
@@ -30,8 +31,11 @@ function DeviceRow({ d, onChange, onRemove }: { d: Device; onChange: () => void;
       </form>
       <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(10rem, 1fr))' }}>
         <Select label="Look" value={d.config.theme ?? 'auto'} onChange={(e) => save({ config: { ...d.config, theme: e.target.value as 'auto' | 'light' | 'dark' } })}><option value="auto">Follow the device</option><option value="light">Light</option><option value="dark">Dark</option></Select>
+        <Select label="Screen size" value={d.config.size ?? 'auto'} onChange={(e) => save({ config: { ...d.config, size: e.target.value as ScreenSize } })}>{SIZE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</Select>
+        <Select label="Text size" value={String(d.config.zoom ?? 0)} onChange={(e) => save({ config: { ...d.config, zoom: Number(e.target.value) } })}>{ZOOM_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</Select>
         <Select label="Photos start after" value={String(d.config.idleMinutes ?? 5)} onChange={(e) => save({ config: { ...d.config, idleMinutes: Number(e.target.value) } })}>{[1, 2, 5, 10, 15, 30].map((m) => <option key={m} value={m}>{m} {m === 1 ? 'minute' : 'minutes'}</option>)}</Select>
       </div>
+      <p className="text-sm text-muted">Screen size is the tablet’s real size across the corners. Smaller sizes fit more on the screen with less scrolling. A change reaches the screen within a few seconds.</p>
       <div><Button variant="ghost" className="text-danger" onClick={onRemove}>Unlink {d.nickname}</Button></div>
     </li>
   );

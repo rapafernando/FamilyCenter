@@ -63,7 +63,7 @@ export type Connection = {
 };
 export type SyncedCalendar = { id: ID; connectionId: ID; externalId: string; name: string; color: string; enabled: boolean; canWrite: boolean; profileId: ID | null; isDefaultTarget: boolean };
 
-export type Device = { id: ID; nickname: string; kind: 'display' | 'browser'; lastSeenAt: ISOTime | null; createdAt: ISOTime; config: { theme?: 'auto' | 'light' | 'dark'; idleMinutes?: number } };
+export type Device = { id: ID; nickname: string; kind: 'display' | 'browser'; lastSeenAt: ISOTime | null; createdAt: ISOTime; config: { theme?: 'auto' | 'light' | 'dark'; size?: 'auto' | '7' | '10' | '11' | '13'; zoom?: number; idleMinutes?: number } };
 export type Member = { id: ID; name: string; email: string; role: Role; isYou: boolean };
 export type Invitation = { id: ID; email: string; role: 'adult' | 'viewer'; token: string; expiresAt: ISOTime };
 

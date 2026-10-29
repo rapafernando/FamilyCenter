@@ -7,6 +7,7 @@ import { data } from '@/lib/data';
 import { useQuery } from '@/lib/data/hooks';
 import { AlertDialog } from '@/components/ui/misc';
 import { describeTimes } from '@/lib/time';
+import { applyScreen, readLocalScreen, type ScreenSize } from '@/lib/screenSize';
 
 /** Light and dark: this browser's choice, the screen's own setting on a display, or the device. */
 export function ThemeSync() {
@@ -23,6 +24,27 @@ export function ThemeSync() {
     const apply = () => { const v = pick(); if (v) document.documentElement.dataset.theme = v; else delete document.documentElement.dataset.theme; };
     apply(); const t = setInterval(apply, 60000); return () => clearInterval(t);
   }, [session.deviceId, dev.data, household.timezone]);
+  return null;
+}
+
+/** How big everything is drawn: the linked screen's own setting, or this browser's choice. Follows the window if it is turned or resized. */
+export function ScreenSizeSync() {
+  const { session, surface } = useApp();
+  const dev = useQuery(() => (session.deviceId ? data.getDevice(session.deviceId) : Promise.resolve(null)), [session.deviceId]);
+  useEffect(() => {
+    const apply = () => {
+      // A linked screen asks the server for its setting; until that answer arrives it uses the one it saw last time, so it does not flash at the wrong size.
+      const key = `fc-dev-screen-${session.deviceId}`;
+      let c: { size: ScreenSize; zoom: number };
+      if (!session.deviceId) c = readLocalScreen();
+      else if (dev.data) { c = { size: dev.data.config.size ?? 'auto', zoom: dev.data.config.zoom ?? 0 }; try { localStorage.setItem(key, JSON.stringify(c)); } catch { /* fine */ } }
+      else { try { c = JSON.parse(localStorage.getItem(key) ?? '') as typeof c; } catch { c = { size: 'auto', zoom: 0 }; } }
+      applyScreen(c.size, c.zoom, surface === 'wall');
+    };
+    apply();
+    window.addEventListener('resize', apply); window.addEventListener('fc:screen', apply);
+    return () => { window.removeEventListener('resize', apply); window.removeEventListener('fc:screen', apply); };
+  }, [session.deviceId, dev.data, surface]);
   return null;
 }
 

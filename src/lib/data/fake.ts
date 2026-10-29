@@ -387,7 +387,7 @@ export const data = {
       s.devices.push(d); s.pairing.claimedDeviceId = d.id; return clone(d);
     });
   },
-  async updateDevice(id: string, patch: Partial<{ nickname: string; config: { theme?: 'auto' | 'light' | 'dark'; idleMinutes?: number } }>) {
+  async updateDevice(id: string, patch: Partial<{ nickname: string; config: { theme?: 'auto' | 'light' | 'dark'; size?: 'auto' | '7' | '10' | '11' | '13'; zoom?: number; idleMinutes?: number } }>) {
     await wait();
     commit((s) => { const d = need(s.devices.find((x) => x.id === id), 'That screen'); if (patch.nickname !== undefined) { if (!clean(patch.nickname)) throw new ApiError('missing', 'Give this screen a name.'); if (s.devices.some((x) => x.id !== id && x.nickname.toLowerCase() === clean(patch.nickname!).toLowerCase())) throw new ApiError('name_taken', 'Another screen already has that name.'); d.nickname = clean(patch.nickname); } if (patch.config) d.config = { ...d.config, ...patch.config }; });
   },

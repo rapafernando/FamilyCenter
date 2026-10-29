@@ -32,7 +32,7 @@ export function SyncStatus({ className }: { className?: string }) {
   const ago = c.lastSyncedAt ? DateTime.fromISO(c.lastSyncedAt).toRelative({ style: 'long' }) : 'not yet';
   const Icon = bad ? TriangleAlert : RefreshCw;
   return (
-    <Link href="/settings/calendars" className={cn('inline-flex min-h-target items-center gap-2 rounded-md text-sm', bad ? 'font-bold text-danger' : 'text-muted', className)}>
+    <Link href="/settings/calendars" className={cn('inline-flex min-h-target items-center gap-2 rounded-md text-sm', bad ? 'font-bold text-danger' : cn('text-muted', '[html[data-density=compact]_&]:hidden'), className)}>
       <Icon aria-hidden className="h-4 w-4" />
       {bad ? 'Google needs to be reconnected' : `Google synced ${ago}`}
     </Link>
@@ -44,12 +44,12 @@ function WallHeader() {
   const now = useClock(household.timezone);
   const w = useQuery(() => data.getWeather(), []);
   return (
-    <header className="flex items-end justify-between gap-4 px-6 pt-4">
+    <header className="flex items-end justify-between gap-4 px-6 pt-4 [html[data-density=compact]_&]:items-center [html[data-density=compact]_&]:px-3 [html[data-density=compact]_&]:pt-2">
       <div>
-        <p className="font-display text-2xl text-ink">{now ? now.toFormat('cccc') : ' '}</p>
-        <p className="text-lg text-muted">{now ? now.toFormat('LLLL d') : ' '}</p>
+        <p className="font-display text-2xl text-ink [html[data-density=compact]_&]:text-lg">{now ? now.toFormat('cccc') : ' '}</p>
+        <p className="text-lg text-muted [html[data-density=compact]_&]:text-base">{now ? now.toFormat('LLLL d') : ' '}</p>
       </div>
-      <p className="font-display text-clock text-ink" aria-label={now ? `Time ${now.toFormat('h:mm a')}` : undefined}>{now ? now.toFormat('h:mm') : ''}</p>
+      <p className="font-display text-clock text-ink [html[data-density=compact]_&]:text-2xl" aria-label={now ? `Time ${now.toFormat('h:mm a')}` : undefined}>{now ? now.toFormat('h:mm') : ''}</p>
       <div className="flex flex-col items-end">
         {w.data && <span className="inline-flex items-center gap-2 rounded-pill border-2 border-line bg-surface px-3 py-1 text-base text-ink"><CloudSun aria-hidden className="h-5 w-5" />{w.data.tempF}° {w.data.label}</span>}
         <SyncStatus />
@@ -63,19 +63,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const path = usePathname();
   if (surface === 'wall') {
     return (
-      <div className="grid min-h-screen" style={{ gridTemplateColumns: '6rem minmax(0,1fr)' }}>
+      <div className="grid min-h-screen" style={{ gridTemplateColumns: 'var(--wall-nav, 6rem) minmax(0,1fr)' }}>
         <nav aria-label="Main" className="sticky top-0 flex h-screen flex-col items-center gap-2 border-r-2 border-line bg-surface py-4">
           {NAV.map(({ href, label, Icon }) => {
             const on = activeFor(path, href);
             return (
               <Link key={href} href={href} aria-current={on ? 'page' : undefined}
-                className={cn('flex min-h-primary w-[5rem] flex-col items-center justify-center gap-0.5 rounded-md text-xs font-bold', on ? 'bg-accent text-accent-on' : 'text-ink')}>
+                className={cn('flex min-h-primary w-[calc(var(--wall-nav,6rem)-1rem)] flex-col items-center justify-center gap-0.5 rounded-md text-xs font-bold', on ? 'bg-accent text-accent-on' : 'text-ink')}>
                 <Icon aria-hidden className="h-6 w-6" />{label}
               </Link>
             );
           })}
         </nav>
-        <div className="flex min-w-0 flex-col"><WallHeader /><main id="main" className="flex-1 px-6 pb-8 pt-3">{children}</main></div>
+        <div className="flex min-w-0 flex-col"><WallHeader /><main id="main" className="flex-1 px-6 pb-8 pt-3 [html[data-density=compact]_&]:px-3 [html[data-density=compact]_&]:pb-4 [html[data-density=compact]_&]:pt-1">{children}</main></div>
       </div>
     );
   }

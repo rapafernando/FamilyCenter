@@ -208,12 +208,12 @@ export const core = {
 
   /* ---------------------------------------------------------------- screens (devices) and pairing */
   listDevices: def('settings', [], async (c) => (await tenant(c, (t) => t.all<{ id: string; nickname: string; kind: 'display' | 'browser'; last_seen_at: string | null; created_at: string; config: Record<string, unknown> }>(
-    'select id, nickname, kind, last_seen_at, created_at, config from devices where revoked_at is null order by created_at'))).map((d) => ({ id: d.id, nickname: d.nickname, kind: d.kind, lastSeenAt: d.last_seen_at, createdAt: d.created_at, config: d.config as { theme?: 'auto' | 'light' | 'dark'; idleMinutes?: number } }))),
+    'select id, nickname, kind, last_seen_at, created_at, config from devices where revoked_at is null order by created_at'))).map((d) => ({ id: d.id, nickname: d.nickname, kind: d.kind, lastSeenAt: d.last_seen_at, createdAt: d.created_at, config: d.config as { theme?: 'auto' | 'light' | 'dark'; size?: 'auto' | '7' | '10' | '11' | '13'; zoom?: number; idleMinutes?: number } }))),
   getDevice: def('read', [zId], async (c, id) => {
     const d = await tenant(c, (t) => t.one<{ id: string; nickname: string; kind: 'display' | 'browser'; last_seen_at: string | null; created_at: string; config: Record<string, unknown> }>('select id, nickname, kind, last_seen_at, created_at, config from devices where id = $1 and revoked_at is null', [id]));
-    return d ? { id: d.id, nickname: d.nickname, kind: d.kind, lastSeenAt: d.last_seen_at, createdAt: d.created_at, config: d.config as { theme?: 'auto' | 'light' | 'dark'; idleMinutes?: number } } : null;
+    return d ? { id: d.id, nickname: d.nickname, kind: d.kind, lastSeenAt: d.last_seen_at, createdAt: d.created_at, config: d.config as { theme?: 'auto' | 'light' | 'dark'; size?: 'auto' | '7' | '10' | '11' | '13'; zoom?: number; idleMinutes?: number } } : null;
   }),
-  updateDevice: def('settings', [zId, z.object({ nickname: zStr(60).optional(), config: z.object({ theme: z.enum(['auto', 'light', 'dark']).optional(), idleMinutes: z.number().int().min(0).max(240).optional() }).optional() })], async (c, id, p) => {
+  updateDevice: def('settings', [zId, z.object({ nickname: zStr(60).optional(), config: z.object({ theme: z.enum(['auto', 'light', 'dark']).optional(), size: z.enum(['auto', '7', '10', '11', '13']).optional(), zoom: z.number().int().min(-2).max(2).optional(), idleMinutes: z.number().int().min(0).max(240).optional() }).optional() })], async (c, id, p) => {
     if (p.nickname !== undefined && !clean(p.nickname)) throw new ApiError('missing', 'Give this screen a name.');
     const n = await tenant(c, (t) => t.exec('update devices set nickname = coalesce($2, nickname), config = coalesce($3::jsonb, config) where id = $1 and revoked_at is null', [id, p.nickname === undefined ? null : clean(p.nickname), p.config ? JSON.stringify(p.config) : null]));
     if (!n) throw new ApiError('not_found', 'That screen was not found.');

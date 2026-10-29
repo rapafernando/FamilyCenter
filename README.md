@@ -6,7 +6,7 @@ Built with Next.js 15 and Postgres 16, run with Docker Compose. The screensaver 
 
 This guide installs it on a fresh **Ubuntu Server 24.04** (22.04 works the same). Every command is meant to be pasted one at a time.
 
-> **Honest status:** the app and its tests (115 browser tests, 83 database-isolation checks, 42 checks of the update helper) were run against stand-in servers for Google, Google Photos, GitHub, email and AI. The Docker files and the update helper's real `docker` calls were written and checked for syntax but were **not run end to end** where this was built (the helper's logic was tested with a stand-in for `docker`), so your first install and your first update are the real test. The troubleshooting section at the end lists what to look at if something fails.
+> **Honest status:** the app and its tests (118 browser tests, 83 database-isolation checks, 42 checks of the update helper) were run against stand-in servers for Google, Google Photos, GitHub, email and AI. The Docker files and the update helper's real `docker` calls were written and checked for syntax but were **not run end to end** where this was built (the helper's logic was tested with a stand-in for `docker`), so your first install and your first update are the real test. The troubleshooting section at the end lists what to look at if something fails.
 
 ## What you need
 
@@ -84,6 +84,7 @@ curl http://127.0.0.1:3000/api/health
 Open the address from step 3 in a browser and choose **Create a household** (`/signup`). Sign-up asks for a **parent PIN** (4 digits). The first person to sign up becomes the owner of the household and also **the person who runs the server**: only that account can change the Google connection and update the server. Then:
 
 - **Add the wall screen:** on the tablet or screen, open `<your address>/pair`. It shows a code. On your phone open More, Screens, link a screen, and type the code.
+- **Match the screen size:** Settings, Screens has a **Screen size** (7 inch, 8 to 10, 11, 13 or larger, or Automatic) and a **Text size** for each linked screen. Smaller sizes draw everything smaller with a tighter header, so a 7 inch tablet needs far less scrolling; larger ones make text bigger for across the room. A browser that is not a linked screen has the same choice under Settings, Display and ads.
 - **Invite family:** More, Household, Invite. Without email set up the app shows a link to copy and send yourself.
 - **The parent PIN:** Settings always ask for it, for everyone, on every device (the wall screen and also a phone where a parent is already signed in). It is remembered for five minutes and then asked again. Change it under Settings, Display and ads. If it is forgotten, reset it on the server with the owner's email (it prints a new one): `docker compose exec web npm run reset-pin -- you@example.com`.
 

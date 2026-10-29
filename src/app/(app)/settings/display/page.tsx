@@ -8,6 +8,7 @@ import { PageHeader } from '@/components/shell/AppShell';
 import { SettingsGate } from '@/components/shell/AdultGate';
 import { Button, Field, Segmented, Select, Switch } from '@/components/ui/controls';
 import { Banner } from '@/components/ui/misc';
+import { SIZE_OPTIONS, ZOOM_OPTIONS, readLocalScreen, saveLocalScreen, type ScreenSize } from '@/lib/screenSize';
 
 type Theme = 'auto' | 'light' | 'dark';
 function readTheme(): Theme { try { return (localStorage.getItem('fc-theme') as Theme) || 'auto'; } catch { return 'auto'; } }
@@ -16,6 +17,8 @@ export default function Display() {
   const { household, session } = useApp(); const notify = useNotice();
   const hasPin = useQuery(() => data.hasPin(), []);
   const [theme, setTheme] = useState<Theme>(readTheme);
+  const [screen, setScreen] = useState(readLocalScreen);
+  const pickScreen = (size: ScreenSize, zoom: number) => { setScreen({ size, zoom }); saveLocalScreen(size, zoom); };
   const [pin, setPin] = useState(''); const [err, setErr] = useState(''); const [ads, setAds] = useState(household.adsEnabled); const [every, setEvery] = useState(household.adsEveryNPhotos);
   const guard = async (fn: () => Promise<unknown>, ok: string) => { setErr(''); try { await fn(); notify({ tone: 'success', title: ok }); } catch (e) { setErr(errMsg(e)); } };
   const pickTheme = (t: Theme) => { setTheme(t); try { localStorage.setItem('fc-theme', t); } catch { /* ignore */ } if (t === 'auto') delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = t; };
@@ -27,8 +30,13 @@ export default function Display() {
         <section aria-label="Look" className="flex flex-col gap-3 rounded-lg border-2 border-line bg-surface p-4">
           <h2 className="font-display text-lg text-ink">Look</h2>
           {session.deviceId
-            ? <p className="text-base text-muted">This is a linked screen. Its look and photo timer are set on the <Link className="font-bold text-accent underline" href="/settings/devices">Screens</Link> page.</p>
-            : <Segmented label="Light or dark on this device" value={theme} onChange={pickTheme} options={[{ value: 'auto', label: 'Automatic' }, { value: 'light', label: 'Light' }, { value: 'dark', label: 'Dark' }]} />}
+            ? <p className="text-base text-muted">This is a linked screen. Its look, size and photo timer are set on the <Link className="font-bold text-accent underline" href="/settings/devices">Screens</Link> page.</p>
+            : <><Segmented label="Light or dark on this device" value={theme} onChange={pickTheme} options={[{ value: 'auto', label: 'Automatic' }, { value: 'light', label: 'Light' }, { value: 'dark', label: 'Dark' }]} />
+              <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(12rem, 1fr))' }}>
+                <Select label="Screen size on this device" value={screen.size} onChange={(e) => pickScreen(e.target.value as ScreenSize, screen.zoom)}>{SIZE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</Select>
+                <Select label="Text size on this device" value={String(screen.zoom)} onChange={(e) => pickScreen(screen.size, Number(e.target.value))}>{ZOOM_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</Select>
+              </div>
+              <p className="text-sm text-muted">Applies on this device only. Smaller sizes fit more on the screen with less scrolling.</p></>}
         </section>
         <section aria-label="Parent PIN" className="flex flex-col gap-3 rounded-lg border-2 border-line bg-surface p-4">
           <h2 className="font-display text-lg text-ink">Parent PIN</h2>

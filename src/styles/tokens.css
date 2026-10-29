@@ -186,6 +186,8 @@
 }
 /* Wall display: everything is rem, so one root size scales the whole interface. */
 :root[data-surface="wall"] { font-size: 125%; }
+/* Screen size setting (Settings, Screens): the app sets the real root size from it; compact is for 7 inch tablets. */
+:root[data-density="compact"] { --wall-nav: 4.75rem; }
 /* Person colour on any element: <div data-marker="tomato"> or style="--m-solid:...;--m-on:...;--m-tint:..." */
 [data-marker] { --m-solid: var(--marker-graphite-solid); --m-on: var(--marker-graphite-on); --m-tint: var(--marker-graphite-tint); }
 [data-marker="tomato"] { --m-solid: var(--marker-tomato-solid); --m-on: var(--marker-tomato-on); --m-tint: var(--marker-tomato-tint); }
